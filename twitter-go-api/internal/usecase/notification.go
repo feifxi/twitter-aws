@@ -17,7 +17,7 @@ type NotificationItem struct {
 	OriginalTweetMediaUrl *string
 }
 
-func (u *Usecase) ListNotifications(ctx context.Context, userID int64, page, size int32) ([]NotificationItem, error) {
+func (u *NotificationUsecase) ListNotifications(ctx context.Context, userID int64, page, size int32) ([]NotificationItem, error) {
 	rows, err := u.store.ListNotifications(ctx, db.ListNotificationsParams{
 		RecipientID: userID,
 		Limit:       size,
@@ -29,19 +29,19 @@ func (u *Usecase) ListNotifications(ctx context.Context, userID int64, page, siz
 	return u.hydrateNotifications(ctx, rows)
 }
 
-func (u *Usecase) CountNotifications(ctx context.Context, userID int64) (int64, error) {
+func (u *NotificationUsecase) CountNotifications(ctx context.Context, userID int64) (int64, error) {
 	return u.store.CountNotifications(ctx, userID)
 }
 
-func (u *Usecase) CountUnreadNotifications(ctx context.Context, userID int64) (int64, error) {
+func (u *NotificationUsecase) CountUnreadNotifications(ctx context.Context, userID int64) (int64, error) {
 	return u.store.GetUnreadNotificationCount(ctx, userID)
 }
 
-func (u *Usecase) MarkAllNotificationsRead(ctx context.Context, userID int64) error {
+func (u *NotificationUsecase) MarkAllNotificationsRead(ctx context.Context, userID int64) error {
 	return u.store.MarkAllNotificationsRead(ctx, userID)
 }
 
-func (u *Usecase) HydrateNotification(ctx context.Context, notification db.Notification) (NotificationItem, error) {
+func (u *NotificationUsecase) HydrateNotification(ctx context.Context, notification db.Notification) (NotificationItem, error) {
 	items, err := u.hydrateNotifications(ctx, []db.Notification{notification})
 	if err != nil {
 		return NotificationItem{}, err
@@ -52,7 +52,7 @@ func (u *Usecase) HydrateNotification(ctx context.Context, notification db.Notif
 	return items[0], nil
 }
 
-func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.Notification) ([]NotificationItem, error) {
+func (u *NotificationUsecase) hydrateNotifications(ctx context.Context, notifications []db.Notification) ([]NotificationItem, error) {
 	if len(notifications) == 0 {
 		return []NotificationItem{}, nil
 	}
@@ -86,7 +86,7 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 			return nil, err
 		}
 		for _, raw := range rawActors {
-			actors[raw.User.ID] = UserItem{User: raw.User, IsFollowing: raw.IsFollowing}
+			actors[raw.User.ID] = newUserItemFromDB(raw.User, raw.IsFollowing)
 		}
 	}
 

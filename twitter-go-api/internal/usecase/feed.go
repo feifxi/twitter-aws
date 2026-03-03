@@ -6,7 +6,7 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
-func (u *Usecase) GetGlobalFeed(ctx context.Context, page, size int32, viewerID *int64) ([]TweetItem, error) {
+func (u *FeedUsecase) GetGlobalFeed(ctx context.Context, page, size int32, viewerID *int64) ([]TweetItem, error) {
 	rows, err := u.store.ListForYouFeed(ctx, db.ListForYouFeedParams{
 		Limit:    size,
 		Offset:   page * size,
@@ -16,14 +16,21 @@ func (u *Usecase) GetGlobalFeed(ctx context.Context, page, size int32, viewerID 
 		return nil, err
 	}
 
-	return u.populateTweetItems(ctx, mapForYouFeedRows(rows), viewerID)
+	inputs := mapTweetHydrationRows(
+		rows,
+		func(r db.ListForYouFeedRow) db.Tweet { return r.Tweet },
+		func(r db.ListForYouFeedRow) bool { return r.IsLiked },
+		func(r db.ListForYouFeedRow) bool { return r.IsRetweeted },
+		func(r db.ListForYouFeedRow) bool { return r.IsFollowing },
+	)
+	return populateTweetItems(ctx, u.store, inputs, viewerID)
 }
 
-func (u *Usecase) CountGlobalFeed(ctx context.Context) (int64, error) {
+func (u *FeedUsecase) CountGlobalFeed(ctx context.Context) (int64, error) {
 	return u.store.CountForYouFeed(ctx)
 }
 
-func (u *Usecase) GetFollowingFeed(ctx context.Context, userID int64, page, size int32) ([]TweetItem, error) {
+func (u *FeedUsecase) GetFollowingFeed(ctx context.Context, userID int64, page, size int32) ([]TweetItem, error) {
 	rows, err := u.store.ListFollowingFeed(ctx, db.ListFollowingFeedParams{
 		FollowerID: userID,
 		Limit:      size,
@@ -34,14 +41,21 @@ func (u *Usecase) GetFollowingFeed(ctx context.Context, userID int64, page, size
 		return nil, err
 	}
 
-	return u.populateTweetItems(ctx, mapFollowingFeedRows(rows), &userID)
+	inputs := mapTweetHydrationRows(
+		rows,
+		func(r db.ListFollowingFeedRow) db.Tweet { return r.Tweet },
+		func(r db.ListFollowingFeedRow) bool { return r.IsLiked },
+		func(r db.ListFollowingFeedRow) bool { return r.IsRetweeted },
+		func(r db.ListFollowingFeedRow) bool { return r.IsFollowing },
+	)
+	return populateTweetItems(ctx, u.store, inputs, &userID)
 }
 
-func (u *Usecase) CountFollowingFeed(ctx context.Context, userID int64) (int64, error) {
+func (u *FeedUsecase) CountFollowingFeed(ctx context.Context, userID int64) (int64, error) {
 	return u.store.CountFollowingFeed(ctx, userID)
 }
 
-func (u *Usecase) GetUserFeed(ctx context.Context, userID int64, page, size int32, viewerID *int64) ([]TweetItem, error) {
+func (u *FeedUsecase) GetUserFeed(ctx context.Context, userID int64, page, size int32, viewerID *int64) ([]TweetItem, error) {
 	vID := nullViewerID(viewerID)
 	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: userID, ViewerID: vID}); err != nil {
 		return nil, err
@@ -57,48 +71,16 @@ func (u *Usecase) GetUserFeed(ctx context.Context, userID int64, page, size int3
 		return nil, err
 	}
 
-	return u.populateTweetItems(ctx, mapUserTweetRows(rows), viewerID)
+	inputs := mapTweetHydrationRows(
+		rows,
+		func(r db.ListUserTweetsRow) db.Tweet { return r.Tweet },
+		func(r db.ListUserTweetsRow) bool { return r.IsLiked },
+		func(r db.ListUserTweetsRow) bool { return r.IsRetweeted },
+		func(r db.ListUserTweetsRow) bool { return r.IsFollowing },
+	)
+	return populateTweetItems(ctx, u.store, inputs, viewerID)
 }
 
-func (u *Usecase) CountUserFeed(ctx context.Context, userID int64) (int64, error) {
+func (u *FeedUsecase) CountUserFeed(ctx context.Context, userID int64) (int64, error) {
 	return u.store.CountUserTweets(ctx, userID)
-}
-
-func mapForYouFeedRows(rows []db.ListForYouFeedRow) []TweetHydrationInput {
-	items := make([]TweetHydrationInput, len(rows))
-	for i := range rows {
-		items[i] = TweetHydrationInput{
-			Tweet:       rows[i].Tweet,
-			IsLiked:     rows[i].IsLiked,
-			IsRetweeted: rows[i].IsRetweeted,
-			IsFollowing: rows[i].IsFollowing,
-		}
-	}
-	return items
-}
-
-func mapFollowingFeedRows(rows []db.ListFollowingFeedRow) []TweetHydrationInput {
-	items := make([]TweetHydrationInput, len(rows))
-	for i := range rows {
-		items[i] = TweetHydrationInput{
-			Tweet:       rows[i].Tweet,
-			IsLiked:     rows[i].IsLiked,
-			IsRetweeted: rows[i].IsRetweeted,
-			IsFollowing: rows[i].IsFollowing,
-		}
-	}
-	return items
-}
-
-func mapUserTweetRows(rows []db.ListUserTweetsRow) []TweetHydrationInput {
-	items := make([]TweetHydrationInput, len(rows))
-	for i := range rows {
-		items[i] = TweetHydrationInput{
-			Tweet:       rows[i].Tweet,
-			IsLiked:     rows[i].IsLiked,
-			IsRetweeted: rows[i].IsRetweeted,
-			IsFollowing: rows[i].IsFollowing,
-		}
-	}
-	return items
 }

@@ -19,7 +19,7 @@ func (server *Server) loginGoogle(ctx *gin.Context) {
 		return
 	}
 
-	authData, err := server.usecase.LoginWithGoogle(ctx, req.IdToken)
+	authData, err := server.authUC.LoginWithGoogle(ctx, req.IdToken)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -36,7 +36,7 @@ func (server *Server) refreshToken(ctx *gin.Context) {
 		return
 	}
 
-	authData, err := server.usecase.RefreshSession(ctx, refreshToken)
+	authData, err := server.authUC.RefreshSession(ctx, refreshToken)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -49,9 +49,9 @@ func (server *Server) refreshToken(ctx *gin.Context) {
 func (server *Server) logout(ctx *gin.Context) {
 	userID, ok := getCurrentUserID(ctx)
 	if ok {
-		server.usecase.Logout(ctx, &userID, nil)
+		server.authUC.Logout(ctx, &userID, nil)
 	} else if refreshToken, err := ctx.Cookie("refresh_token"); err == nil {
-		server.usecase.Logout(ctx, nil, &refreshToken)
+		server.authUC.Logout(ctx, nil, &refreshToken)
 	}
 
 	server.clearSessionCookies(ctx)
@@ -88,7 +88,7 @@ func (server *Server) getMe(ctx *gin.Context) {
 		return
 	}
 
-	user, err := server.usecase.GetMe(ctx, userID)
+	user, err := server.authUC.GetMe(ctx, userID)
 	if err != nil {
 		writeError(ctx, err)
 		return

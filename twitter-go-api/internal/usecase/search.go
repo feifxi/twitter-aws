@@ -7,7 +7,7 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
-func (u *Usecase) SearchUsers(ctx context.Context, query string, page, size int32, viewerID *int64) ([]UserItem, error) {
+func (u *SearchUsecase) SearchUsers(ctx context.Context, query string, page, size int32, viewerID *int64) ([]UserItem, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return []UserItem{}, nil
@@ -25,12 +25,12 @@ func (u *Usecase) SearchUsers(ctx context.Context, query string, page, size int3
 
 	items := make([]UserItem, 0, len(rows))
 	for _, r := range rows {
-		items = append(items, UserItem{User: r.User, IsFollowing: r.IsFollowing})
+		items = append(items, newUserItemFromDB(r.User, r.IsFollowing))
 	}
 	return items, nil
 }
 
-func (u *Usecase) CountSearchUsers(ctx context.Context, query string) (int64, error) {
+func (u *SearchUsecase) CountSearchUsers(ctx context.Context, query string) (int64, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return 0, nil
@@ -38,7 +38,7 @@ func (u *Usecase) CountSearchUsers(ctx context.Context, query string) (int64, er
 	return u.store.CountSearchUsers(ctx, &trimmed)
 }
 
-func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int32, viewerID *int64) ([]TweetItem, error) {
+func (u *SearchUsecase) SearchTweets(ctx context.Context, query string, page, size int32, viewerID *int64) ([]TweetItem, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return []TweetItem{}, nil
@@ -60,7 +60,14 @@ func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int
 			return nil, err
 		}
 
-		return u.populateTweetItems(ctx, mapHashtagSearchRows(rows), viewerID)
+		inputs := mapTweetHydrationRows(
+			rows,
+			func(r db.SearchTweetsByHashtagRow) db.Tweet { return r.Tweet },
+			func(r db.SearchTweetsByHashtagRow) bool { return r.IsLiked },
+			func(r db.SearchTweetsByHashtagRow) bool { return r.IsRetweeted },
+			func(r db.SearchTweetsByHashtagRow) bool { return r.IsFollowing },
+		)
+		return populateTweetItems(ctx, u.store, inputs, viewerID)
 	}
 
 	tsQuery := buildTSQuery(trimmed)
@@ -78,10 +85,17 @@ func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int
 		return nil, err
 	}
 
-	return u.populateTweetItems(ctx, mapFullTextSearchRows(rows), viewerID)
+	inputs := mapTweetHydrationRows(
+		rows,
+		func(r db.SearchTweetsFullTextRow) db.Tweet { return r.Tweet },
+		func(r db.SearchTweetsFullTextRow) bool { return r.IsLiked },
+		func(r db.SearchTweetsFullTextRow) bool { return r.IsRetweeted },
+		func(r db.SearchTweetsFullTextRow) bool { return r.IsFollowing },
+	)
+	return populateTweetItems(ctx, u.store, inputs, viewerID)
 }
 
-func (u *Usecase) CountSearchTweets(ctx context.Context, query string) (int64, error) {
+func (u *SearchUsecase) CountSearchTweets(ctx context.Context, query string) (int64, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return 0, nil
@@ -95,7 +109,7 @@ func (u *Usecase) CountSearchTweets(ctx context.Context, query string) (int64, e
 	return u.store.CountSearchTweetsFullText(ctx, tsQuery)
 }
 
-func (u *Usecase) SearchHashtags(ctx context.Context, query string, limit int32) ([]db.Hashtag, error) {
+func (u *SearchUsecase) SearchHashtags(ctx context.Context, query string, limit int32) ([]db.Hashtag, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return []db.Hashtag{}, nil
@@ -106,30 +120,4 @@ func (u *Usecase) SearchHashtags(ctx context.Context, query string, limit int32)
 		Column1: &prefix,
 		Limit:   limit,
 	})
-}
-
-func mapHashtagSearchRows(rows []db.SearchTweetsByHashtagRow) []TweetHydrationInput {
-	items := make([]TweetHydrationInput, len(rows))
-	for i := range rows {
-		items[i] = TweetHydrationInput{
-			Tweet:       rows[i].Tweet,
-			IsLiked:     rows[i].IsLiked,
-			IsRetweeted: rows[i].IsRetweeted,
-			IsFollowing: rows[i].IsFollowing,
-		}
-	}
-	return items
-}
-
-func mapFullTextSearchRows(rows []db.SearchTweetsFullTextRow) []TweetHydrationInput {
-	items := make([]TweetHydrationInput, len(rows))
-	for i := range rows {
-		items[i] = TweetHydrationInput{
-			Tweet:       rows[i].Tweet,
-			IsLiked:     rows[i].IsLiked,
-			IsRetweeted: rows[i].IsRetweeted,
-			IsFollowing: rows[i].IsFollowing,
-		}
-	}
-	return items
 }

@@ -25,7 +25,7 @@ type CreateTweetInput struct {
 	Media    *MediaUpload
 }
 
-func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (TweetItem, error) {
+func (u *TweetUsecase) CreateTweet(ctx context.Context, input CreateTweetInput) (TweetItem, error) {
 	trimmedContent := ""
 	if input.Content != nil {
 		trimmedContent = strings.TrimSpace(*input.Content)
@@ -86,7 +86,7 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 			parentTweet, err := q.GetTweet(ctx, db.GetTweetParams{ID: *input.ParentID})
 			if err == nil {
 				tweetID := createdTweet.ID
-				pendingNotification, _ = u.createNotification(ctx, q, parentTweet.Tweet.UserID, input.UserID, &tweetID, NotifTypeReply)
+				pendingNotification, _ = createNotification(ctx, q, parentTweet.Tweet.UserID, input.UserID, &tweetID, NotifTypeReply)
 			}
 		}
 
@@ -106,7 +106,7 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		return nil
 	}, func() {
 		if pendingNotification.ID != 0 {
-			u.dispatchNotification(pendingNotification)
+			dispatchNotification(u.publishNotification, pendingNotification)
 		}
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 	return u.GetTweet(ctx, createdTweet.ID, &input.UserID)
 }
 
-func (u *Usecase) DeleteTweet(ctx context.Context, userID, tweetID int64) error {
+func (u *TweetUsecase) DeleteTweet(ctx context.Context, userID, tweetID int64) error {
 	tweet, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID})
 	if err != nil {
 		return err
@@ -195,19 +195,26 @@ func (u *Usecase) DeleteTweet(ctx context.Context, userID, tweetID int64) error 
 	return nil
 }
 
-func (u *Usecase) GetTweet(ctx context.Context, tweetID int64, viewerID *int64) (TweetItem, error) {
+func (u *TweetUsecase) GetTweet(ctx context.Context, tweetID int64, viewerID *int64) (TweetItem, error) {
 	r, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID, ViewerID: nullViewerID(viewerID)})
 	if err != nil {
 		return TweetItem{}, err
 	}
-	items, err := u.populateTweetItems(ctx, []TweetHydrationInput{mapGetTweetRow(r)}, viewerID)
+	inputs := mapTweetHydrationRows(
+		[]db.GetTweetRow{r},
+		func(row db.GetTweetRow) db.Tweet { return row.Tweet },
+		func(row db.GetTweetRow) bool { return row.IsLiked },
+		func(row db.GetTweetRow) bool { return row.IsRetweeted },
+		func(row db.GetTweetRow) bool { return row.IsFollowing },
+	)
+	items, err := populateTweetItems(ctx, u.store, inputs, viewerID)
 	if err != nil || len(items) == 0 {
 		return TweetItem{}, err
 	}
 	return items[0], nil
 }
 
-func (u *Usecase) ListReplies(ctx context.Context, tweetID int64, page, size int32, viewerID *int64) ([]TweetItem, error) {
+func (u *TweetUsecase) ListReplies(ctx context.Context, tweetID int64, page, size int32, viewerID *int64) ([]TweetItem, error) {
 	vID := nullViewerID(viewerID)
 
 	_, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID, ViewerID: vID})
@@ -225,36 +232,21 @@ func (u *Usecase) ListReplies(ctx context.Context, tweetID int64, page, size int
 		return nil, err
 	}
 
-	return u.populateTweetItems(ctx, mapTweetReplyRows(rows), viewerID)
+	inputs := mapTweetHydrationRows(
+		rows,
+		func(row db.ListTweetRepliesRow) db.Tweet { return row.Tweet },
+		func(row db.ListTweetRepliesRow) bool { return row.IsLiked },
+		func(row db.ListTweetRepliesRow) bool { return row.IsRetweeted },
+		func(row db.ListTweetRepliesRow) bool { return row.IsFollowing },
+	)
+	return populateTweetItems(ctx, u.store, inputs, viewerID)
 }
 
-func mapGetTweetRow(row db.GetTweetRow) TweetHydrationInput {
-	return TweetHydrationInput{
-		Tweet:       row.Tweet,
-		IsLiked:     row.IsLiked,
-		IsRetweeted: row.IsRetweeted,
-		IsFollowing: row.IsFollowing,
-	}
-}
-
-func mapTweetReplyRows(rows []db.ListTweetRepliesRow) []TweetHydrationInput {
-	items := make([]TweetHydrationInput, len(rows))
-	for i := range rows {
-		items[i] = TweetHydrationInput{
-			Tweet:       rows[i].Tweet,
-			IsLiked:     rows[i].IsLiked,
-			IsRetweeted: rows[i].IsRetweeted,
-			IsFollowing: rows[i].IsFollowing,
-		}
-	}
-	return items
-}
-
-func (u *Usecase) CountReplies(ctx context.Context, tweetID int64) (int64, error) {
+func (u *TweetUsecase) CountReplies(ctx context.Context, tweetID int64) (int64, error) {
 	return u.store.CountTweetReplies(ctx, &tweetID)
 }
 
-func (u *Usecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
+func (u *TweetUsecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
 	tweet, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID})
 	if err != nil {
 		return err
@@ -269,12 +261,12 @@ func (u *Usecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
 
 		if liked {
 			id := tweet.Tweet.ID
-			pendingNotification, _ = u.createNotification(ctx, q, tweet.Tweet.UserID, userID, &id, NotifTypeLike)
+			pendingNotification, _ = createNotification(ctx, q, tweet.Tweet.UserID, userID, &id, NotifTypeLike)
 		}
 		return nil
 	}, func() {
 		if pendingNotification.ID != 0 {
-			u.dispatchNotification(pendingNotification)
+			dispatchNotification(u.publishNotification, pendingNotification)
 		}
 	})
 	if err != nil {
@@ -284,7 +276,7 @@ func (u *Usecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
 	return nil
 }
 
-func (u *Usecase) UnlikeTweet(ctx context.Context, userID, tweetID int64) error {
+func (u *TweetUsecase) UnlikeTweet(ctx context.Context, userID, tweetID int64) error {
 	if _, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID}); err != nil {
 		return err
 	}
@@ -293,7 +285,7 @@ func (u *Usecase) UnlikeTweet(ctx context.Context, userID, tweetID int64) error 
 	return err
 }
 
-func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem, error) {
+func (u *TweetUsecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem, error) {
 	targetTweet, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID})
 	if err != nil {
 		return TweetItem{}, err
@@ -332,11 +324,11 @@ func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem
 		}
 
 		id := originalTweet.Tweet.ID
-		pendingNotification, _ = u.createNotification(ctx, q, originalTweet.Tweet.UserID, userID, &id, NotifTypeRetweet)
+		pendingNotification, _ = createNotification(ctx, q, originalTweet.Tweet.UserID, userID, &id, NotifTypeRetweet)
 		return nil
 	}, func() {
 		if pendingNotification.ID != 0 {
-			u.dispatchNotification(pendingNotification)
+			dispatchNotification(u.publishNotification, pendingNotification)
 		}
 	})
 	if err != nil {
@@ -346,7 +338,7 @@ func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem
 	return u.GetTweet(ctx, created.ID, &userID)
 }
 
-func (u *Usecase) UndoRetweet(ctx context.Context, userID, tweetID int64) error {
+func (u *TweetUsecase) UndoRetweet(ctx context.Context, userID, tweetID int64) error {
 	targetTweet, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID})
 	if err != nil {
 		return err

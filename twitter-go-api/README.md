@@ -10,20 +10,21 @@ It was designed to replace the original Java/Spring Boot backend to provide sign
 - **Framework:** Gin Web Framework
 - **Database:** PostgreSQL
 - **Query Builder:** sqlc (Type-safe SQL code generation)
-- **Caching:** Redis v9
+- **Redis:** Redis v9 (notification pub/sub + distributed rate limiting)
 - **Logging:** Zerolog (Structured JSON Telemetry)
 - **Authentication:** Custom JWT authentication (Tokens)
 - **Storage:** Azure Blob Storage (for media uploads)
 - **Architecture:** Clean Architecture (Handler -> Usecase -> Repository)
 
-## ✨ Key Features & Optimizations
+## ✨ Key Features
 
-- **Memory Batching (DataLoader Pattern):** Eliminates the N+1 query problem commonly found in social media feeds. The API batches database IDs (like `UserID`, `ParentID`, `RetweetID`) and fetches entire graph relationships in just 2-3 optimal SQL queries.
-- **Redis Caching:** Drastically reduces DB load by caching Anonymous Feeds and Trending Hashtags in Redis, while dynamically injecting user-specific `IsLiked` parameters securely from memory.
-- **Enterprise Hardening:** Utilizes Zerolog for structured JSON observability, enforces `Read/WriteTimeouts` to mitigate Slowloris DDoS attacks, and cleanly masks internal database constraints into proper API Conflict responses.
-- **Efficient JSON Serialization:** Direct mapping of nested structs with exact camelCase JSON tags corresponding to the frontend expectations.
-- **Full Text Search:** Leverages PostgreSQL's native `to_tsvector` and `ts_rank` for blazing fast full-text tweet searching and hashtag prefix matching.
-- **Media Uploads:** Multipart-form parsing directly streaming to Azure Blob storage.
+- **Layered Architecture:** HTTP handlers depend on explicit domain service interfaces (auth, user, tweet, feed, search, discovery, notification) to keep boundaries clear and testable.
+- **Memory Batching (DataLoader Pattern):** Reduces N+1 query patterns in feed hydration by batching author and referenced tweet lookups.
+- **Redis Pub/Sub for Notifications:** Supports cross-instance real-time notification fanout for SSE streams.
+- **Security-Focused Upload Validation:** Validates media/avatar size, extension allowlists, and server-side MIME detection before usecase execution.
+- **Structured Error Contract:** Maps validation/app/db errors into consistent API error responses.
+- **Full Text Search:** Uses PostgreSQL `to_tsvector` / `ts_rank` for tweet search and hashtag prefix search.
+- **Media Uploads:** Multipart file streaming to Azure Blob storage.
 
 ## 🛠️ Getting Started (Local Development)
 
@@ -56,6 +57,7 @@ DB_MAX_CONN_LIFETIME_MINUTES=5
 MAX_MULTIPART_MEMORY_BYTES=33554432
 MAX_MEDIA_BYTES=104857600
 MAX_AVATAR_BYTES=5242880
+TRUSTED_PROXIES=
 TOKEN_SYMMETRIC_KEY=replace-with-a-strong-32-plus-char-secret
 TOKEN_DURATION_MINUTES=15
 REFRESH_TOKEN_DURATION_DAYS=30
@@ -84,7 +86,17 @@ The API will be available at `http://localhost:8080`.
 - `/db` - Contains `migration` files and `query` SQL schemas. `sqlc` reads these to generate the Go database repository.
 - `/internal/db` - The generated `sqlc` database interaction code. Do not edit manually.
 - `/internal/server` - Gin HTTP handlers, routes, request parsing, and JSON response mapping.
-- `/internal/usecase` - The core business logic, including the DataLoader batching mechanisms.
+- `/internal/usecase` - Domain business services (auth/user/tweet/feed/search/discovery/notification) and shared domain helpers.
 - `/internal/config` - Viper configuration management.
 - `/internal/token` - JWT token creation and verification.
 - `/internal/service` - Third-party integrations (like Azure Blob Storage).
+
+## ✅ Testing
+
+- Unit and handler tests run with:
+```bash
+go test ./...
+```
+- Database integration tests for transaction semantics are included in `internal/db/store_integration_test.go`.
+  - Set `TEST_DATABASE_URL` to run them.
+  - If `TEST_DATABASE_URL` is not set, those integration tests are skipped.

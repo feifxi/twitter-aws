@@ -18,7 +18,7 @@ func (server *Server) getTrendingHashtags(ctx *gin.Context) {
 	if limit > maxSize {
 		limit = maxSize
 	}
-	hashtags, err := server.usecase.GetTrendingHashtags(ctx, limit)
+	hashtags, err := server.discoveryUC.GetTrendingHashtags(ctx, limit)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -36,12 +36,12 @@ func (server *Server) getSuggestedUsers(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	users, err := server.usecase.GetSuggestedUsers(ctx, page, size, viewerID)
+	users, err := server.discoveryUC.GetSuggestedUsers(ctx, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountSuggestedUsers(ctx, viewerID)
+	total, err := server.discoveryUC.CountSuggestedUsers(ctx, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return

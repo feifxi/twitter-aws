@@ -8,7 +8,7 @@ import (
 
 // populateTweetItems acts as a simple DataLoader to batch fetch authors and parent/original tweets,
 // resolving the N+1 query problem.
-func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydrationInput, viewerID *int64) ([]TweetItem, error) {
+func populateTweetItems(ctx context.Context, store db.Store, inputs []TweetHydrationInput, viewerID *int64) ([]TweetItem, error) {
 	if len(inputs) == 0 {
 		return []TweetItem{}, nil
 	}
@@ -42,7 +42,7 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 	}
 
 	// 2. Fetch Authors
-	users, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
+	users, err := store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
 		UserIds:  userIDs,
 		ViewerID: vID,
 	})
@@ -52,13 +52,13 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 
 	usersMap := make(map[int64]UserItem)
 	for _, rawUser := range users {
-		usersMap[rawUser.User.ID] = UserItem{User: rawUser.User, IsFollowing: rawUser.IsFollowing}
+		usersMap[rawUser.User.ID] = newUserItemFromDB(rawUser.User, rawUser.IsFollowing)
 	}
 
 	// 3. Fetch Referenced Tweets (Parents / Originals)
 	var refTweetsMap map[int64]TweetItem
 	if len(tweetIDs) > 0 {
-		rawRefTweets, err := u.store.GetTweetsByIDs(ctx, db.GetTweetsByIDsParams{
+		rawRefTweets, err := store.GetTweetsByIDs(ctx, db.GetTweetsByIDsParams{
 			TweetIds: tweetIDs,
 			ViewerID: vID,
 		})
@@ -89,13 +89,13 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 			for id := range missingAuthorsMap {
 				missingAuthorIDs = append(missingAuthorIDs, id)
 			}
-			moreUsers, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
+			moreUsers, err := store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
 				UserIds:  missingAuthorIDs,
 				ViewerID: vID,
 			})
 			if err == nil {
 				for _, rawUser := range moreUsers {
-					usersMap[rawUser.User.ID] = UserItem{User: rawUser.User, IsFollowing: rawUser.IsFollowing}
+					usersMap[rawUser.User.ID] = newUserItemFromDB(rawUser.User, rawUser.IsFollowing)
 				}
 			}
 		}
@@ -103,13 +103,11 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 		refTweetsMap = make(map[int64]TweetItem)
 		for i, rt := range refTweetsSlice {
 			raw := rawRefTweets[i]
-			item := TweetItem{
-				Tweet:       rt,
-				Author:      usersMap[rt.UserID],
-				IsLiked:     raw.IsLiked,
-				IsRetweeted: raw.IsRetweeted,
-				IsFollowing: raw.IsFollowing,
-			}
+			item := newTweetItemFromDB(rt)
+			item.Author = usersMap[rt.UserID]
+			item.IsLiked = raw.IsLiked
+			item.IsRetweeted = raw.IsRetweeted
+			item.IsFollowing = raw.IsFollowing
 			refTweetsMap[rt.ID] = item
 		}
 	}
@@ -118,13 +116,11 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 	result := make([]TweetItem, 0, len(inputs))
 	for _, in := range inputs {
 		t := in.Tweet
-		item := TweetItem{
-			Tweet:       t,
-			Author:      usersMap[t.UserID],
-			IsLiked:     in.IsLiked,
-			IsRetweeted: in.IsRetweeted,
-			IsFollowing: in.IsFollowing,
-		}
+		item := newTweetItemFromDB(t)
+		item.Author = usersMap[t.UserID]
+		item.IsLiked = in.IsLiked
+		item.IsRetweeted = in.IsRetweeted
+		item.IsFollowing = in.IsFollowing
 
 		if t.ParentID != nil {
 			if parentTweet, ok := refTweetsMap[*t.ParentID]; ok {

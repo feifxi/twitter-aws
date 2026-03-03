@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chanombude/twitter-go-api/internal/config"
@@ -25,13 +26,19 @@ import (
 )
 
 type Server struct {
-	config     config.Config
-	store      db.Store
-	tokenMaker token.Maker
-	storage    service.StorageService
-	usecase    *usecase.Usecase
-	router     *gin.Engine
-	redis      *redis.Client
+	config      config.Config
+	tokenMaker  token.Maker
+	authUC      usecase.AuthService
+	userUC      usecase.UserService
+	tweetUC     usecase.TweetService
+	feedUC      usecase.FeedService
+	searchUC    usecase.SearchService
+	discoveryUC usecase.DiscoveryService
+	notifyUC    usecase.NotificationService
+	router      *gin.Engine
+	redis       *redis.Client
+	sseClients  map[int64][]*sseClient
+	sseMu       sync.RWMutex
 }
 
 type idURIRequest struct {
@@ -51,12 +58,18 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 
 	server := &Server{
 		config:     config,
-		store:      store,
 		tokenMaker: tokenMaker,
-		storage:    storageService,
 		redis:      redisClient,
+		sseClients: make(map[int64][]*sseClient),
 	}
-	server.usecase = usecase.New(config, store, tokenMaker, storageService, redisClient, server.publishNotification)
+	services := usecase.NewServices(config, store, tokenMaker, storageService, server.publishNotification)
+	server.authUC = services.Auth
+	server.userUC = services.User
+	server.tweetUC = services.Tweet
+	server.feedUC = services.Feed
+	server.searchUC = services.Search
+	server.discoveryUC = services.Discovery
+	server.notifyUC = services.Notification
 
 	server.setupRouter()
 
@@ -71,6 +84,9 @@ func (server *Server) setupRouter() {
 	configureValidationFieldNames()
 
 	router := gin.New()
+	if err := router.SetTrustedProxies(parseTrustedProxies(server.config.TrustedProxies)); err != nil {
+		log.Warn().Err(err).Msg("Failed to set trusted proxies, falling back to default proxy behavior")
+	}
 	if server.config.MaxMultipartMemoryBytes > 0 {
 		router.MaxMultipartMemory = server.config.MaxMultipartMemoryBytes
 	}
@@ -103,10 +119,10 @@ func (server *Server) setupRouter() {
 	}))
 
 	// Default rate limiter.
-	router.Use(middleware.RateLimiter(20, 60))
+	router.Use(middleware.RateLimiterWithRedis(server.redis, 20, 60, "rl:default"))
 
 	// Stricter auth limits.
-	strictAuthLimiter := middleware.RateLimiter(2, 5)
+	strictAuthLimiter := middleware.RateLimiterWithRedis(server.redis, 2, 5, "rl:auth")
 	router.POST("/api/v1/auth/google", strictAuthLimiter, server.loginGoogle)
 	router.POST("/api/v1/auth/refresh", strictAuthLimiter, server.refreshToken)
 	router.POST("/api/v1/auth/logout", strictAuthLimiter, middleware.OptionalAuthMiddleware(server.tokenMaker), server.logout)
@@ -128,7 +144,7 @@ func (server *Server) setupRouter() {
 	publicRoutes.GET("/discovery/trending", server.getTrendingHashtags)
 	publicRoutes.GET("/discovery/users", server.getSuggestedUsers)
 
-	strictWriteLimiter := middleware.RateLimiter(2, 5)
+	strictWriteLimiter := middleware.RateLimiterWithRedis(server.redis, 2, 5, "rl:write")
 	authRoutes := api.Group("")
 	authRoutes.Use(middleware.AuthMiddleware(server.tokenMaker))
 	authRoutes.GET("/auth/me", server.getMe)
@@ -148,6 +164,26 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/notifications/mark-read", server.markNotificationRead)
 
 	server.router = router
+}
+
+func parseTrustedProxies(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		v := strings.TrimSpace(p)
+		if v == "" {
+			continue
+		}
+		out = append(out, v)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func configureValidationFieldNames() {
@@ -203,7 +239,7 @@ func (server *Server) publishNotification(notification db.Notification) {
 	hydrateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	hydrated, err := server.usecase.HydrateNotification(hydrateCtx, notification)
+	hydrated, err := server.notifyUC.HydrateNotification(hydrateCtx, notification)
 	if err != nil {
 		log.Error().Err(err).Int64("notification_id", notification.ID).Int64("recipient_id", notification.RecipientID).Msg("Failed to hydrate notification for SSE; event not published")
 		return
@@ -213,7 +249,7 @@ func (server *Server) publishNotification(notification db.Notification) {
 
 func (server *Server) broadcastToRedis(recipientID int64, notification notificationResponse) {
 	if server.redis == nil {
-		sendNotificationToUser(recipientID, notification)
+		server.sendNotificationToUser(recipientID, notification)
 		return
 	}
 
@@ -229,6 +265,6 @@ func (server *Server) broadcastToRedis(recipientID int64, notification notificat
 
 	if err := server.redis.Publish(pubCtx, "notifications", data).Err(); err != nil {
 		log.Error().Err(err).Msg("Failed to publish notification to Redis")
-		sendNotificationToUser(recipientID, notification)
+		server.sendNotificationToUser(recipientID, notification)
 	}
 }

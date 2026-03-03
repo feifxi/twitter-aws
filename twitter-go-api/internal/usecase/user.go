@@ -22,19 +22,19 @@ type UpdateProfileInput struct {
 	Avatar      *AvatarUpload
 }
 
-func (u *Usecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {
+func (u *UserUsecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {
 	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: viewerID})
 	if err != nil {
 		return UserItem{}, err
 	}
 
-	return UserItem{User: user.User, IsFollowing: user.IsFollowing}, nil
+	return newUserItemFromDB(user.User, user.IsFollowing), nil
 }
 
-func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateProfileInput) (db.User, error) {
+func (u *UserUsecase) UpdateProfile(ctx context.Context, userID int64, input UpdateProfileInput) (UserItem, error) {
 	existingUser, err := u.store.GetUser(ctx, db.GetUserParams{ID: userID})
 	if err != nil {
-		return db.User{}, err
+		return UserItem{}, err
 	}
 
 	newAvatar := existingUser.User.AvatarUrl
@@ -42,12 +42,12 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 	if input.Avatar != nil {
 		contentType := strings.ToLower(input.Avatar.ContentType)
 		if !strings.HasPrefix(contentType, "image/") {
-			return db.User{}, apperr.BadRequest("avatar must be an image")
+			return UserItem{}, apperr.BadRequest("avatar must be an image")
 		}
 
 		uploadedAvatarURL, err = u.storage.UploadFile(ctx, input.Avatar.Reader, input.Avatar.Filename, input.Avatar.ContentType)
 		if err != nil {
-			return db.User{}, err
+			return UserItem{}, err
 		}
 		newAvatar = &uploadedAvatarURL
 	}
@@ -72,17 +72,17 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 		if uploadedAvatarURL != "" {
 			_ = u.storage.DeleteFile(ctx, uploadedAvatarURL)
 		}
-		return db.User{}, err
+		return UserItem{}, err
 	}
 
 	if uploadedAvatarURL != "" && existingUser.User.AvatarUrl != nil {
 		_ = u.storage.DeleteFile(ctx, *existingUser.User.AvatarUrl)
 	}
 
-	return updatedUser, nil
+	return newUserItemFromDB(updatedUser, false), nil
 }
 
-func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64) (bool, error) {
+func (u *UserUsecase) FollowUser(ctx context.Context, followerID, targetUserID int64) (bool, error) {
 	targetUser, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: nil})
 	if err != nil {
 		return false, err
@@ -98,12 +98,12 @@ func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64
 		}
 
 		if inserted {
-			pendingNotification, _ = u.createNotification(ctx, q, targetUser.User.ID, followerID, nil, NotifTypeFollow)
+			pendingNotification, _ = createNotification(ctx, q, targetUser.User.ID, followerID, nil, NotifTypeFollow)
 		}
 		return nil
 	}, func() {
 		if pendingNotification.ID != 0 {
-			u.dispatchNotification(pendingNotification)
+			dispatchNotification(u.publishNotification, pendingNotification)
 		}
 	})
 	if err != nil {
@@ -113,7 +113,7 @@ func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64
 	return inserted, nil
 }
 
-func (u *Usecase) UnfollowUser(ctx context.Context, followerID, targetUserID int64) error {
+func (u *UserUsecase) UnfollowUser(ctx context.Context, followerID, targetUserID int64) error {
 	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: nil}); err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (u *Usecase) UnfollowUser(ctx context.Context, followerID, targetUserID int
 	return err
 }
 
-func (u *Usecase) ListFollowers(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
+func (u *UserUsecase) ListFollowers(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
 	vID := viewerID
 	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID}); err != nil {
 		return nil, err
@@ -140,12 +140,12 @@ func (u *Usecase) ListFollowers(ctx context.Context, targetUserID int64, page, s
 
 	items := make([]UserItem, 0, len(users))
 	for _, r := range users {
-		items = append(items, UserItem{User: r.User, IsFollowing: r.IsFollowing})
+		items = append(items, newUserItemFromDB(r.User, r.IsFollowing))
 	}
 	return items, nil
 }
 
-func (u *Usecase) ListFollowing(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
+func (u *UserUsecase) ListFollowing(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
 	vID := viewerID
 	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID}); err != nil {
 		return nil, err
@@ -163,15 +163,15 @@ func (u *Usecase) ListFollowing(ctx context.Context, targetUserID int64, page, s
 
 	items := make([]UserItem, 0, len(users))
 	for _, r := range users {
-		items = append(items, UserItem{User: r.User, IsFollowing: r.IsFollowing})
+		items = append(items, newUserItemFromDB(r.User, r.IsFollowing))
 	}
 	return items, nil
 }
 
-func (u *Usecase) CountFollowers(ctx context.Context, targetUserID int64) (int64, error) {
+func (u *UserUsecase) CountFollowers(ctx context.Context, targetUserID int64) (int64, error) {
 	return u.store.CountFollowersUsers(ctx, targetUserID)
 }
 
-func (u *Usecase) CountFollowing(ctx context.Context, targetUserID int64) (int64, error) {
+func (u *UserUsecase) CountFollowing(ctx context.Context, targetUserID int64) (int64, error) {
 	return u.store.CountFollowingUsers(ctx, targetUserID)
 }

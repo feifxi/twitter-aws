@@ -6,7 +6,7 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
-func (u *Usecase) GetTrendingHashtags(ctx context.Context, limit int32) ([]db.Hashtag, error) {
+func (u *DiscoveryUsecase) GetTrendingHashtags(ctx context.Context, limit int32) ([]db.Hashtag, error) {
 	hashtags, err := u.store.GetTrendingHashtagsLast24h(ctx, limit)
 	if err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func (u *Usecase) GetTrendingHashtags(ctx context.Context, limit int32) ([]db.Ha
 	return hashtags, nil
 }
 
-func (u *Usecase) GetSuggestedUsers(ctx context.Context, page, size int32, viewerID *int64) ([]UserItem, error) {
+func (u *DiscoveryUsecase) GetSuggestedUsers(ctx context.Context, page, size int32, viewerID *int64) ([]UserItem, error) {
 	if viewerID != nil {
 		rows, err := u.store.ListSuggestedUsers(ctx, db.ListSuggestedUsersParams{
 			FollowerID: *viewerID,
@@ -32,7 +32,7 @@ func (u *Usecase) GetSuggestedUsers(ctx context.Context, page, size int32, viewe
 
 		items := make([]UserItem, 0, len(rows))
 		for _, r := range rows {
-			items = append(items, UserItem{User: r.User, IsFollowing: r.IsFollowing})
+			items = append(items, newUserItemFromDB(r.User, r.IsFollowing))
 		}
 		return items, nil
 	}
@@ -44,12 +44,12 @@ func (u *Usecase) GetSuggestedUsers(ctx context.Context, page, size int32, viewe
 
 	items := make([]UserItem, 0, len(users))
 	for _, r := range users {
-		items = append(items, UserItem{User: r, IsFollowing: false})
+		items = append(items, newUserItemFromDB(r, false))
 	}
 	return items, nil
 }
 
-func (u *Usecase) CountSuggestedUsers(ctx context.Context, viewerID *int64) (int64, error) {
+func (u *DiscoveryUsecase) CountSuggestedUsers(ctx context.Context, viewerID *int64) (int64, error) {
 	if viewerID != nil {
 		return u.store.CountSuggestedUsers(ctx, *viewerID)
 	}

@@ -26,12 +26,12 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	users, err := server.usecase.SearchUsers(ctx, req.Query, page, size, viewerID)
+	users, err := server.searchUC.SearchUsers(ctx, req.Query, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountSearchUsers(ctx, req.Query)
+	total, err := server.searchUC.CountSearchUsers(ctx, req.Query)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -54,12 +54,12 @@ func (server *Server) searchTweets(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	tweets, err := server.usecase.SearchTweets(ctx, req.Query, page, size, viewerID)
+	tweets, err := server.searchUC.SearchTweets(ctx, req.Query, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountSearchTweets(ctx, req.Query)
+	total, err := server.searchUC.CountSearchTweets(ctx, req.Query)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -79,7 +79,7 @@ func (server *Server) searchHashtags(ctx *gin.Context) {
 	if limit > maxSize {
 		limit = maxSize
 	}
-	hashtags, err := server.usecase.SearchHashtags(ctx, query, limit)
+	hashtags, err := server.searchUC.SearchHashtags(ctx, query, limit)
 	if err != nil {
 		writeError(ctx, err)
 		return

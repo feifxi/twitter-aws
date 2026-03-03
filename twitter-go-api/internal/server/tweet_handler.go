@@ -35,21 +35,31 @@ func (server *Server) createTweet(ctx *gin.Context) {
 			return
 		}
 
-		file, err := req.Media.Open()
+		if !hasAllowedExtension(req.Media.Filename, mediaAllowedExts) {
+			writeValidationError(ctx, "media", "unsupported file extension")
+			return
+		}
+
+		file, reader, detectedContentType, err := openAndDetectUpload(req.Media)
 		if err != nil {
-			writeError(ctx, apperr.BadRequest("failed to open media file"))
+			writeError(ctx, apperr.BadRequest("failed to inspect media file"))
 			return
 		}
 		defer file.Close()
 
+		if !isAllowedType(detectedContentType, mediaAllowedMIMEs) {
+			writeValidationError(ctx, "media", "unsupported media type")
+			return
+		}
+
 		input.Media = &usecase.MediaUpload{
 			Filename:    req.Media.Filename,
-			ContentType: req.Media.Header.Get("Content-Type"),
-			Reader:      file,
+			ContentType: detectedContentType,
+			Reader:      reader,
 		}
 	}
 
-	tweet, err := server.usecase.CreateTweet(ctx, input)
+	tweet, err := server.tweetUC.CreateTweet(ctx, input)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -67,7 +77,7 @@ func (server *Server) deleteTweet(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := server.usecase.DeleteTweet(ctx, userID, req.ID); err != nil {
+	if err := server.tweetUC.DeleteTweet(ctx, userID, req.ID); err != nil {
 		writeError(ctx, err)
 		return
 	}
@@ -84,7 +94,7 @@ func (server *Server) getTweet(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	tweet, err := server.usecase.GetTweet(ctx, req.ID, viewerID)
+	tweet, err := server.tweetUC.GetTweet(ctx, req.ID, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -106,12 +116,12 @@ func (server *Server) getReplies(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	tweets, err := server.usecase.ListReplies(ctx, req.ID, page, size, viewerID)
+	tweets, err := server.tweetUC.ListReplies(ctx, req.ID, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountReplies(ctx, req.ID)
+	total, err := server.tweetUC.CountReplies(ctx, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -130,7 +140,7 @@ func (server *Server) likeTweet(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := server.usecase.LikeTweet(ctx, userID, req.ID); err != nil {
+	if err := server.tweetUC.LikeTweet(ctx, userID, req.ID); err != nil {
 		writeError(ctx, err)
 		return
 	}
@@ -147,7 +157,7 @@ func (server *Server) unlikeTweet(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := server.usecase.UnlikeTweet(ctx, userID, req.ID); err != nil {
+	if err := server.tweetUC.UnlikeTweet(ctx, userID, req.ID); err != nil {
 		writeError(ctx, err)
 		return
 	}
@@ -164,7 +174,7 @@ func (server *Server) retweet(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	tweet, err := server.usecase.Retweet(ctx, userID, req.ID)
+	tweet, err := server.tweetUC.Retweet(ctx, userID, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -182,7 +192,7 @@ func (server *Server) undoRetweet(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := server.usecase.UndoRetweet(ctx, userID, req.ID); err != nil {
+	if err := server.tweetUC.UndoRetweet(ctx, userID, req.ID); err != nil {
 		writeError(ctx, err)
 		return
 	}

@@ -39,29 +39,37 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 			return
 		}
 
-		file, err := req.Avatar.Open()
+		if !hasAllowedExtension(req.Avatar.Filename, avatarAllowedExts) {
+			writeValidationError(ctx, "avatar", "unsupported file extension")
+			return
+		}
+
+		file, reader, detectedContentType, err := openAndDetectUpload(req.Avatar)
 		if err != nil {
-			writeError(ctx, apperr.BadRequest("failed to open avatar file"))
+			writeError(ctx, apperr.BadRequest("failed to inspect avatar file"))
 			return
 		}
 		defer file.Close()
 
-		contentType := req.Avatar.Header.Get("Content-Type")
+		if !isAllowedType(detectedContentType, avatarAllowedMIMEs) {
+			writeValidationError(ctx, "avatar", "unsupported avatar type")
+			return
+		}
 
 		input.Avatar = &usecase.AvatarUpload{
 			Filename:    req.Avatar.Filename,
-			ContentType: contentType,
-			Reader:      file,
+			ContentType: detectedContentType,
+			Reader:      reader,
 		}
 	}
 
-	updatedUser, err := server.usecase.UpdateProfile(ctx, userID, input)
+	updatedUser, err := server.userUC.UpdateProfile(ctx, userID, input)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, newUserResponse(usecase.UserItem{User: updatedUser}))
+	ctx.JSON(http.StatusOK, newUserResponse(updatedUser))
 }
 
 func (server *Server) getUser(ctx *gin.Context) {
@@ -76,7 +84,7 @@ func (server *Server) getUser(ctx *gin.Context) {
 		viewerID = &id
 	}
 
-	user, err := server.usecase.GetUser(ctx, req.ID, viewerID)
+	user, err := server.userUC.GetUser(ctx, req.ID, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -101,7 +109,7 @@ func (server *Server) followUser(ctx *gin.Context) {
 		return
 	}
 
-	_, err := server.usecase.FollowUser(ctx, followerID, req.ID)
+	_, err := server.userUC.FollowUser(ctx, followerID, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -121,7 +129,7 @@ func (server *Server) unfollowUser(ctx *gin.Context) {
 		return
 	}
 
-	if err := server.usecase.UnfollowUser(ctx, followerID, req.ID); err != nil {
+	if err := server.userUC.UnfollowUser(ctx, followerID, req.ID); err != nil {
 		writeError(ctx, err)
 		return
 	}
@@ -144,12 +152,12 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 		viewerID = &id
 	}
 
-	users, err := server.usecase.ListFollowers(ctx, req.ID, page, size, viewerID)
+	users, err := server.userUC.ListFollowers(ctx, req.ID, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountFollowers(ctx, req.ID)
+	total, err := server.userUC.CountFollowers(ctx, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -175,12 +183,12 @@ func (server *Server) listFollowing(ctx *gin.Context) {
 		viewerID = &id
 	}
 
-	users, err := server.usecase.ListFollowing(ctx, req.ID, page, size, viewerID)
+	users, err := server.userUC.ListFollowing(ctx, req.ID, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountFollowing(ctx, req.ID)
+	total, err := server.userUC.CountFollowing(ctx, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return

@@ -15,12 +15,12 @@ func (server *Server) getGlobalFeed(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	tweets, err := server.usecase.GetGlobalFeed(ctx, page, size, viewerID)
+	tweets, err := server.feedUC.GetGlobalFeed(ctx, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountGlobalFeed(ctx)
+	total, err := server.feedUC.CountGlobalFeed(ctx)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -38,12 +38,12 @@ func (server *Server) getFollowingFeed(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	tweets, err := server.usecase.GetFollowingFeed(ctx, userID, page, size)
+	tweets, err := server.feedUC.GetFollowingFeed(ctx, userID, page, size)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountFollowingFeed(ctx, userID)
+	total, err := server.feedUC.CountFollowingFeed(ctx, userID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -66,12 +66,12 @@ func (server *Server) getUserFeed(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	tweets, err := server.usecase.GetUserFeed(ctx, req.ID, page, size, viewerID)
+	tweets, err := server.feedUC.GetUserFeed(ctx, req.ID, page, size, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountUserFeed(ctx, req.ID)
+	total, err := server.feedUC.CountUserFeed(ctx, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return

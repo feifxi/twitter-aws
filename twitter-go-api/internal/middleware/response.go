@@ -1,20 +1,12 @@
 package middleware
 
-import "github.com/gin-gonic/gin"
-
-type fieldError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
-}
-
-type apiErrorResponse struct {
-	Code    string       `json:"code"`
-	Message string       `json:"message"`
-	Details []fieldError `json:"details,omitempty"`
-}
+import (
+	"github.com/chanombude/twitter-go-api/internal/apiresponse"
+	"github.com/gin-gonic/gin"
+)
 
 func abortWithError(ctx *gin.Context, status int, code, message string) {
-	ctx.AbortWithStatusJSON(status, apiErrorResponse{
+	ctx.AbortWithStatusJSON(status, apiresponse.Error{
 		Code:    code,
 		Message: message,
 	})

@@ -62,7 +62,7 @@ func buildTSQuery(raw string) string {
 // createNotification inserts a notification row using the provided Queries handle.
 // Use inside ExecTx to ensure the row is part of the transaction.
 // Returns the notification (for dispatch after commit) or zero value if skipped.
-func (u *Usecase) createNotification(ctx context.Context, q *db.Queries, recipientID, actorID int64, tweetID *int64, typ string) (db.Notification, error) {
+func createNotification(ctx context.Context, q *db.Queries, recipientID, actorID int64, tweetID *int64, typ string) (db.Notification, error) {
 	if recipientID == actorID {
 		return db.Notification{}, nil
 	}
@@ -82,11 +82,11 @@ func (u *Usecase) createNotification(ctx context.Context, q *db.Queries, recipie
 
 // dispatchNotification pushes a notification via SSE.
 // Call ONLY after the transaction has committed successfully.
-func (u *Usecase) dispatchNotification(notification db.Notification) {
+func dispatchNotification(publishNotification func(db.Notification), notification db.Notification) {
 	if notification.ID == 0 {
 		return // was skipped (self-notification)
 	}
-	if u.publishNotification != nil {
-		u.publishNotification(notification)
+	if publishNotification != nil {
+		publishNotification(notification)
 	}
 }

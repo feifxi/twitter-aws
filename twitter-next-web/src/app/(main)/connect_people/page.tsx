@@ -23,7 +23,7 @@ export default function ConnectPeoplePage() {
       <div className="sticky top-0 z-30 bg-background/60 backdrop-blur-md border-b border-border px-4 py-3 flex items-center gap-4">
         <div 
             onClick={() => router.back()} 
-            className="p-2 rounded-full hover:bg-card transition-colors -ml-2"
+            className="p-2 rounded-full hover:bg-card cursor-pointer transition-colors -ml-2"
         >
             <ArrowLeft className="w-5 h-5 text-foreground" />
         </div>

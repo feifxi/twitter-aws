@@ -172,10 +172,6 @@ func successResponse() gin.H {
 	return gin.H{"success": true}
 }
 
-func tokenResponse(token string) gin.H {
-	return gin.H{"accessToken": token}
-}
-
 func newUserResponseList(users []usecase.UserItem) []userResponse {
 	response := make([]userResponse, 0, len(users))
 	for _, user := range users {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
@@ -18,16 +17,11 @@ type sseClient struct {
 	channel chan notificationResponse
 }
 
-var (
-	clients = make(map[int64][]*sseClient)
-	mu      sync.RWMutex
-)
-
-func sendNotificationToUser(userID int64, notification notificationResponse) {
-	mu.RLock()
-	userClients, ok := clients[userID]
+func (server *Server) sendNotificationToUser(userID int64, notification notificationResponse) {
+	server.sseMu.RLock()
+	userClients, ok := server.sseClients[userID]
 	snapshot := append([]*sseClient(nil), userClients...)
-	mu.RUnlock()
+	server.sseMu.RUnlock()
 	if !ok {
 		return
 	}
@@ -60,7 +54,7 @@ func (server *Server) listenRedisNotifications() {
 			continue
 		}
 
-		sendNotificationToUser(payload.RecipientID, payload.Notification)
+		server.sendNotificationToUser(payload.RecipientID, payload.Notification)
 	}
 }
 
@@ -82,31 +76,31 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 
 	client := &sseClient{channel: make(chan notificationResponse, 10)}
 
-	mu.Lock()
-	clients[userID] = append(clients[userID], client)
-	connectionCount := len(clients[userID])
-	mu.Unlock()
+	server.sseMu.Lock()
+	server.sseClients[userID] = append(server.sseClients[userID], client)
+	connectionCount := len(server.sseClients[userID])
+	server.sseMu.Unlock()
 	log.Info().Int64("user_id", userID).Int("connections", connectionCount).Msg("SSE client connected")
 
 	fmt.Fprintf(ctx.Writer, "event: connected\ndata: {\"status\": \"ok\"}\n\n")
 	flusher.Flush()
 
 	defer func() {
-		mu.Lock()
-		defer mu.Unlock()
+		server.sseMu.Lock()
+		defer server.sseMu.Unlock()
 
-		userClients := clients[userID]
+		userClients := server.sseClients[userID]
 		for i, c := range userClients {
 			if c == client {
-				clients[userID] = append(userClients[:i], userClients[i+1:]...)
+				server.sseClients[userID] = append(userClients[:i], userClients[i+1:]...)
 				break
 			}
 		}
 
-		if len(clients[userID]) == 0 {
-			delete(clients, userID)
+		if len(server.sseClients[userID]) == 0 {
+			delete(server.sseClients, userID)
 		}
-		log.Info().Int64("user_id", userID).Int("connections", len(clients[userID])).Msg("SSE client disconnected")
+		log.Info().Int64("user_id", userID).Int("connections", len(server.sseClients[userID])).Msg("SSE client disconnected")
 	}()
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -136,12 +130,12 @@ func (server *Server) listNotifications(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	notifications, err := server.usecase.ListNotifications(ctx, userID, page, size)
+	notifications, err := server.notifyUC.ListNotifications(ctx, userID, page, size)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	total, err := server.usecase.CountNotifications(ctx, userID)
+	total, err := server.notifyUC.CountNotifications(ctx, userID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -156,7 +150,7 @@ func (server *Server) getUnreadNotificationCount(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	count, err := server.usecase.CountUnreadNotifications(ctx, userID)
+	count, err := server.notifyUC.CountUnreadNotifications(ctx, userID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -169,7 +163,7 @@ func (server *Server) markNotificationRead(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := server.usecase.MarkAllNotificationsRead(ctx, userID); err != nil {
+	if err := server.notifyUC.MarkAllNotificationsRead(ctx, userID); err != nil {
 		writeError(ctx, err)
 		return
 	}
