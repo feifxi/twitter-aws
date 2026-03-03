@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -95,7 +96,8 @@ func main() {
 }
 
 func runDBMigration(migrationURL string, dbSource string) {
-	migration, err := migrate.New(migrationURL, dbSource)
+	migrateURL := strings.Replace(dbSource, "postgresql://", "pgx5://", 1)
+	migration, err := migrate.New(migrationURL, migrateURL)
 	if err != nil {
 		log.Fatal("cannot create new migrate instance:", err)
 	}
