@@ -39,15 +39,15 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		parentID = sql.NullInt64{Int64: *input.ParentID, Valid: true}
 	}
 
-	mediaType := sql.NullString{String: "NONE", Valid: true}
+	mediaType := sql.NullString{String: MediaTypeNone, Valid: true}
 	mediaURL := sql.NullString{Valid: false}
 	if input.Media != nil {
 		contentType := strings.ToLower(input.Media.ContentType)
 		switch {
 		case strings.HasPrefix(contentType, "image/"):
-			mediaType = sql.NullString{String: "IMAGE", Valid: true}
+			mediaType = sql.NullString{String: MediaTypeImage, Valid: true}
 		case strings.HasPrefix(contentType, "video/"):
-			mediaType = sql.NullString{String: "VIDEO", Valid: true}
+			mediaType = sql.NullString{String: MediaTypeVideo, Valid: true}
 		default:
 			return TweetItem{}, apperr.BadRequest("only images or videos are allowed")
 		}
@@ -70,7 +70,7 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 
 	var createdTweet db.Tweet
 	var pendingNotification db.Notification
-	err := u.store.ExecTx(ctx, func(q *db.Queries) error {
+	err := u.store.ExecTxAfterCommit(ctx, func(q *db.Queries) error {
 		var err error
 		createdTweet, err = q.CreateTweet(ctx, db.CreateTweetParams{
 			UserID:    input.UserID,
@@ -110,6 +110,10 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		}
 
 		return nil
+	}, func() {
+		if pendingNotification.ID != 0 {
+			u.dispatchNotification(pendingNotification)
+		}
 	})
 	if err != nil {
 		if mediaURL.Valid {
@@ -117,8 +121,6 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		}
 		return TweetItem{}, err
 	}
-
-	u.dispatchNotification(pendingNotification)
 
 	return u.GetTweet(ctx, createdTweet.ID, &input.UserID)
 }
@@ -232,6 +234,28 @@ func (u *Usecase) ListReplies(ctx context.Context, tweetID int64, page, size int
 	return u.populateTweetItems(ctx, mapTweetReplyRows(rows), viewerID)
 }
 
+func mapGetTweetRow(row db.GetTweetRow) TweetHydrationInput {
+	return TweetHydrationInput{
+		Tweet:       row.Tweet,
+		IsLiked:     row.IsLiked,
+		IsRetweeted: row.IsRetweeted,
+		IsFollowing: row.IsFollowing,
+	}
+}
+
+func mapTweetReplyRows(rows []db.ListTweetRepliesRow) []TweetHydrationInput {
+	items := make([]TweetHydrationInput, len(rows))
+	for i := range rows {
+		items[i] = TweetHydrationInput{
+			Tweet:       rows[i].Tweet,
+			IsLiked:     rows[i].IsLiked,
+			IsRetweeted: rows[i].IsRetweeted,
+			IsFollowing: rows[i].IsFollowing,
+		}
+	}
+	return items
+}
+
 func (u *Usecase) CountReplies(ctx context.Context, tweetID int64) (int64, error) {
 	return u.store.CountTweetReplies(ctx, sql.NullInt64{Int64: tweetID, Valid: true})
 }
@@ -243,7 +267,7 @@ func (u *Usecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
 	}
 
 	var pendingNotification db.Notification
-	err = u.store.ExecTx(ctx, func(q *db.Queries) error {
+	err = u.store.ExecTxAfterCommit(ctx, func(q *db.Queries) error {
 		liked, err := q.LikeTweet(ctx, db.LikeTweetParams{UserID: userID, TweetID: tweetID})
 		if err != nil {
 			return err
@@ -254,12 +278,15 @@ func (u *Usecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
 			pendingNotification, _ = u.createNotification(ctx, q, tweet.Tweet.UserID, userID, &id, NotifTypeLike)
 		}
 		return nil
+	}, func() {
+		if pendingNotification.ID != 0 {
+			u.dispatchNotification(pendingNotification)
+		}
 	})
 	if err != nil {
 		return err
 	}
 
-	u.dispatchNotification(pendingNotification)
 	return nil
 }
 
@@ -288,7 +315,7 @@ func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem
 
 	var created db.CreateRetweetRow
 	var pendingNotification db.Notification
-	err = u.store.ExecTx(ctx, func(q *db.Queries) error {
+	err = u.store.ExecTxAfterCommit(ctx, func(q *db.Queries) error {
 		var err error
 		created, err = q.CreateRetweet(ctx, db.CreateRetweetParams{
 			UserID:    userID,
@@ -313,12 +340,14 @@ func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem
 		id := originalTweet.Tweet.ID
 		pendingNotification, _ = u.createNotification(ctx, q, originalTweet.Tweet.UserID, userID, &id, NotifTypeRetweet)
 		return nil
+	}, func() {
+		if pendingNotification.ID != 0 {
+			u.dispatchNotification(pendingNotification)
+		}
 	})
 	if err != nil {
 		return TweetItem{}, err
 	}
-
-	u.dispatchNotification(pendingNotification)
 
 	return u.GetTweet(ctx, created.ID, &userID)
 }

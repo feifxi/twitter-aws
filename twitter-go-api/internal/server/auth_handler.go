@@ -43,7 +43,7 @@ func (server *Server) refreshToken(ctx *gin.Context) {
 	}
 
 	server.setSessionCookies(ctx, authData.AccessToken, authData.RefreshToken)
-	ctx.JSON(http.StatusOK, gin.H{"accessToken": authData.AccessToken})
+	ctx.JSON(http.StatusOK, tokenResponse(authData.AccessToken))
 }
 
 func (server *Server) logout(ctx *gin.Context) {
@@ -55,7 +55,7 @@ func (server *Server) logout(ctx *gin.Context) {
 	}
 
 	server.clearSessionCookies(ctx)
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
 
 func (server *Server) setSessionCookies(ctx *gin.Context, accessToken, refreshToken string) {

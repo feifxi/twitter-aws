@@ -59,3 +59,42 @@ func (u *Usecase) GetUserFeed(ctx context.Context, userID int64, page, size int3
 func (u *Usecase) CountUserFeed(ctx context.Context, userID int64) (int64, error) {
 	return u.store.CountUserTweets(ctx, userID)
 }
+
+func mapForYouFeedRows(rows []db.ListForYouFeedRow) []TweetHydrationInput {
+	items := make([]TweetHydrationInput, len(rows))
+	for i := range rows {
+		items[i] = TweetHydrationInput{
+			Tweet:       rows[i].Tweet,
+			IsLiked:     rows[i].IsLiked,
+			IsRetweeted: rows[i].IsRetweeted,
+			IsFollowing: rows[i].IsFollowing,
+		}
+	}
+	return items
+}
+
+func mapFollowingFeedRows(rows []db.ListFollowingFeedRow) []TweetHydrationInput {
+	items := make([]TweetHydrationInput, len(rows))
+	for i := range rows {
+		items[i] = TweetHydrationInput{
+			Tweet:       rows[i].Tweet,
+			IsLiked:     rows[i].IsLiked,
+			IsRetweeted: rows[i].IsRetweeted,
+			IsFollowing: rows[i].IsFollowing,
+		}
+	}
+	return items
+}
+
+func mapUserTweetRows(rows []db.ListUserTweetsRow) []TweetHydrationInput {
+	items := make([]TweetHydrationInput, len(rows))
+	for i := range rows {
+		items[i] = TweetHydrationInput{
+			Tweet:       rows[i].Tweet,
+			IsLiked:     rows[i].IsLiked,
+			IsRetweeted: rows[i].IsRetweeted,
+			IsFollowing: rows[i].IsFollowing,
+		}
+	}
+	return items
+}

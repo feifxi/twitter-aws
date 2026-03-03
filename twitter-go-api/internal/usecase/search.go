@@ -90,17 +90,10 @@ func (u *Usecase) CountSearchTweets(ctx context.Context, query string) (int64, e
 	}
 
 	if strings.HasPrefix(trimmed, "#") {
-		hashtag := strings.TrimSpace(strings.ToLower(strings.TrimLeft(trimmed, "#")))
-		if hashtag == "" {
-			return 0, nil
-		}
-		return u.store.CountSearchTweetsByHashtag(ctx, hashtag)
+		return u.store.CountSearchTweetsByHashtag(ctx, strings.ToLower(trimmed[1:]))
 	}
 
 	tsQuery := buildTSQuery(trimmed)
-	if tsQuery == "" {
-		return 0, nil
-	}
 	return u.store.CountSearchTweetsFullText(ctx, tsQuery)
 }
 
@@ -114,4 +107,30 @@ func (u *Usecase) SearchHashtags(ctx context.Context, query string, limit int32)
 		Column1: sql.NullString{String: strings.TrimPrefix(trimmed, "#"), Valid: true},
 		Limit:   limit,
 	})
+}
+
+func mapHashtagSearchRows(rows []db.SearchTweetsByHashtagRow) []TweetHydrationInput {
+	items := make([]TweetHydrationInput, len(rows))
+	for i := range rows {
+		items[i] = TweetHydrationInput{
+			Tweet:       rows[i].Tweet,
+			IsLiked:     rows[i].IsLiked,
+			IsRetweeted: rows[i].IsRetweeted,
+			IsFollowing: rows[i].IsFollowing,
+		}
+	}
+	return items
+}
+
+func mapFullTextSearchRows(rows []db.SearchTweetsFullTextRow) []TweetHydrationInput {
+	items := make([]TweetHydrationInput, len(rows))
+	for i := range rows {
+		items[i] = TweetHydrationInput{
+			Tweet:       rows[i].Tweet,
+			IsLiked:     rows[i].IsLiked,
+			IsRetweeted: rows[i].IsRetweeted,
+			IsFollowing: rows[i].IsFollowing,
+		}
+	}
+	return items
 }

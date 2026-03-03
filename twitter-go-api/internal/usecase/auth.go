@@ -46,7 +46,7 @@ func (u *Usecase) LoginWithGoogle(ctx context.Context, idToken string) (AuthResu
 			Email:       email,
 			DisplayName: nullStringFromPtr(&name),
 			AvatarUrl:   nullStringFromPtr(&picture),
-			Role:        "USER",
+			Role:        RoleUser,
 			Provider:    "GOOGLE",
 		})
 		if err != nil {

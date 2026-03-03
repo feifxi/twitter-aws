@@ -16,6 +16,18 @@ const (
 	NotifTypeFollow  = "FOLLOW"
 )
 
+// MediaType constants.
+const (
+	MediaTypeNone  = "NONE"
+	MediaTypeImage = "IMAGE"
+	MediaTypeVideo = "VIDEO"
+)
+
+// Role constants.
+const (
+	RoleUser = "USER"
+)
+
 type TweetItem struct {
 	db.Tweet
 	Author         UserItem

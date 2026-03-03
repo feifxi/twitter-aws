@@ -91,7 +91,7 @@ func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64
 
 	var inserted bool
 	var pendingNotification db.Notification
-	err = u.store.ExecTx(ctx, func(q *db.Queries) error {
+	err = u.store.ExecTxAfterCommit(ctx, func(q *db.Queries) error {
 		var err error
 		inserted, err = q.FollowUser(ctx, db.FollowUserParams{FollowerID: followerID, FollowingID: targetUserID})
 		if err != nil {
@@ -102,12 +102,15 @@ func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64
 			pendingNotification, _ = u.createNotification(ctx, q, targetUser.User.ID, followerID, nil, NotifTypeFollow)
 		}
 		return nil
+	}, func() {
+		if pendingNotification.ID != 0 {
+			u.dispatchNotification(pendingNotification)
+		}
 	})
 	if err != nil {
 		return false, err
 	}
 
-	u.dispatchNotification(pendingNotification)
 	return inserted, nil
 }
 

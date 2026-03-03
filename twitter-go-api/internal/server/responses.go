@@ -5,6 +5,7 @@ import (
 
 	"github.com/chanombude/twitter-go-api/internal/db"
 	"github.com/chanombude/twitter-go-api/internal/usecase"
+	"github.com/gin-gonic/gin"
 )
 
 type authResponse struct {
@@ -50,20 +51,20 @@ func newUserResponse(user usecase.UserItem) userResponse {
 }
 
 type tweetResponse struct {
-	ID            int64          `json:"id"`
-	Content       *string        `json:"content"`
-	MediaType     *string        `json:"mediaType"`
-	MediaUrl      *string        `json:"mediaUrl"`
-	User          userResponse   `json:"user"`
-	ReplyCount    int32          `json:"replyCount"`
-	LikeCount     int32          `json:"likeCount"`
-	RetweetCount  int32          `json:"retweetCount"`
-	IsLiked       bool           `json:"isLiked"`
-	IsRetweeted   bool           `json:"isRetweeted"`
-	RetweetedTweet *tweetResponse `json:"retweetedTweet,omitempty"`
-	ReplyToTweetID *int64         `json:"replyToTweetId"`
-	ReplyToUsername *string       `json:"replyToUsername"`
-	CreatedAt     time.Time      `json:"createdAt"`
+	ID              int64          `json:"id"`
+	Content         *string        `json:"content"`
+	MediaType       *string        `json:"mediaType"`
+	MediaUrl        *string        `json:"mediaUrl"`
+	User            userResponse   `json:"user"`
+	ReplyCount      int32          `json:"replyCount"`
+	LikeCount       int32          `json:"likeCount"`
+	RetweetCount    int32          `json:"retweetCount"`
+	IsLiked         bool           `json:"isLiked"`
+	IsRetweeted     bool           `json:"isRetweeted"`
+	RetweetedTweet  *tweetResponse `json:"retweetedTweet,omitempty"`
+	ReplyToTweetID  *int64         `json:"replyToTweetId"`
+	ReplyToUsername *string        `json:"replyToUsername"`
+	CreatedAt       time.Time      `json:"createdAt"`
 }
 
 func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
@@ -90,20 +91,20 @@ func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
 	}
 
 	return tweetResponse{
-		ID:             tweet.ID,
-		Content:        content,
-		MediaType:      mediaType,
-		MediaUrl:       mediaURL,
-		User:           newUserResponse(tweet.Author),
-		ReplyCount:     tweet.ReplyCount,
-		LikeCount:      tweet.LikeCount,
-		RetweetCount:   tweet.RetweetCount,
-		IsLiked:        tweet.IsLiked,
-		IsRetweeted:    tweet.IsRetweeted,
-		RetweetedTweet: original,
-		ReplyToTweetID: parentID,
+		ID:              tweet.ID,
+		Content:         content,
+		MediaType:       mediaType,
+		MediaUrl:        mediaURL,
+		User:            newUserResponse(tweet.Author),
+		ReplyCount:      tweet.ReplyCount,
+		LikeCount:       tweet.LikeCount,
+		RetweetCount:    tweet.RetweetCount,
+		IsLiked:         tweet.IsLiked,
+		IsRetweeted:     tweet.IsRetweeted,
+		RetweetedTweet:  original,
+		ReplyToTweetID:  parentID,
 		ReplyToUsername: tweet.ParentUsername,
-		CreatedAt:      tweet.CreatedAt,
+		CreatedAt:       tweet.CreatedAt,
 	}
 }
 
@@ -126,17 +127,17 @@ func newHashtagResponse(tag db.Hashtag) hashtagResponse {
 }
 
 type notificationResponse struct {
-	ID                   int64        `json:"id"`
-	Actor                userResponse `json:"actor"`
-	TweetID              *int64       `json:"tweetId"`
-	TweetContent         *string      `json:"tweetContent"`
-	TweetMediaUrl        *string      `json:"tweetMediaUrl"`
-	OriginalTweetID      *int64       `json:"originalTweetId,omitempty"`
-	OriginalTweetContent *string      `json:"originalTweetContent,omitempty"`
-	OriginalTweetMediaUrl *string     `json:"originalTweetMediaUrl,omitempty"`
-	Type                 string       `json:"type"`
-	IsRead               bool         `json:"isRead"`
-	CreatedAt            time.Time    `json:"createdAt"`
+	ID                    int64        `json:"id"`
+	Actor                 userResponse `json:"actor"`
+	TweetID               *int64       `json:"tweetId"`
+	TweetContent          *string      `json:"tweetContent"`
+	TweetMediaUrl         *string      `json:"tweetMediaUrl"`
+	OriginalTweetID       *int64       `json:"originalTweetId,omitempty"`
+	OriginalTweetContent  *string      `json:"originalTweetContent,omitempty"`
+	OriginalTweetMediaUrl *string      `json:"originalTweetMediaUrl,omitempty"`
+	Type                  string       `json:"type"`
+	IsRead                bool         `json:"isRead"`
+	CreatedAt             time.Time    `json:"createdAt"`
 }
 
 func newNotificationResponse(item usecase.NotificationItem) notificationResponse {
@@ -146,16 +147,21 @@ func newNotificationResponse(item usecase.NotificationItem) notificationResponse
 	}
 
 	return notificationResponse{
-		ID:                    item.ID,
-		Actor:                 newUserResponse(item.Actor),
-		TweetID:               tweetID,
-		TweetContent:          item.TweetContent,
-		TweetMediaUrl:         item.TweetMediaUrl,
-		OriginalTweetID:       item.OriginalTweetID,
-		OriginalTweetContent:  item.OriginalTweetContent,
-		OriginalTweetMediaUrl: item.OriginalTweetMediaUrl,
-		Type:                  item.Type,
-		IsRead:                item.IsRead,
-		CreatedAt:             item.CreatedAt,
+		ID:                   item.ID,
+		Actor:                newUserResponse(item.Actor),
+		TweetID:              tweetID,
+		TweetContent:         item.TweetContent,
+		TweetMediaUrl:        item.TweetMediaUrl,
+		OriginalTweetID:      item.OriginalTweetID,
+		OriginalTweetContent: item.OriginalTweetContent,
+		CreatedAt:            item.CreatedAt,
 	}
+}
+
+func successResponse() gin.H {
+	return gin.H{"success": true}
+}
+
+func tokenResponse(token string) gin.H {
+	return gin.H{"accessToken": token}
 }

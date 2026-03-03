@@ -77,7 +77,7 @@ func (server *Server) deleteTweet(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
 
 func (server *Server) getTweet(ctx *gin.Context) {
@@ -143,7 +143,7 @@ func (server *Server) likeTweet(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
 
 func (server *Server) unlikeTweet(ctx *gin.Context) {
@@ -160,7 +160,7 @@ func (server *Server) unlikeTweet(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
 
 func (server *Server) retweet(ctx *gin.Context) {
@@ -195,5 +195,5 @@ func (server *Server) undoRetweet(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }

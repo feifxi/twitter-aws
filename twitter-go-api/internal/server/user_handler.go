@@ -101,7 +101,7 @@ func (server *Server) followUser(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
 
 func (server *Server) unfollowUser(ctx *gin.Context) {
@@ -120,7 +120,7 @@ func (server *Server) unfollowUser(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
 
 func (server *Server) listFollowers(ctx *gin.Context) {

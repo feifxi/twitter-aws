@@ -164,7 +164,7 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 			if preview, ok := tweets[n.TweetID.Int64]; ok {
 				item.TweetContent = preview.Content
 				item.TweetMediaUrl = preview.Media
-				if n.Type == "REPLY" && preview.ParentID != nil {
+				if n.Type == NotifTypeReply && preview.ParentID != nil {
 					if parentPreview, ok := tweets[*preview.ParentID]; ok {
 						item.OriginalTweetID = preview.ParentID
 						item.OriginalTweetContent = parentPreview.Content
@@ -177,21 +177,4 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 	}
 
 	return items, nil
-}
-
-func (u *Usecase) createAndDispatchNotification(ctx context.Context, recipientID, actorID int64, tweetID *int64, notifType string) error {
-	if recipientID == actorID {
-		return nil
-	}
-	var tID sql.NullInt64
-	if tweetID != nil {
-		tID = sql.NullInt64{Int64: *tweetID, Valid: true}
-	}
-	_, err := u.store.CreateNotification(ctx, db.CreateNotificationParams{
-		RecipientID: recipientID,
-		ActorID:     actorID,
-		TweetID:     tID,
-		Type:        notifType,
-	})
-	return err
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
@@ -63,9 +64,16 @@ func (server *Server) listenRedisNotifications() {
 }
 
 func (server *Server) streamNotifications(ctx *gin.Context) {
+	flusher, ok := ctx.Writer.(http.Flusher)
+	if !ok {
+		writeError(ctx, apperr.Internal("streaming unsupported", nil))
+		return
+	}
+
 	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
 	ctx.Writer.Header().Set("Cache-Control", "no-cache")
 	ctx.Writer.Header().Set("Connection", "keep-alive")
+	ctx.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {
@@ -81,10 +89,12 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 	log.Info().Int64("user_id", userID).Int("connections", connectionCount).Msg("SSE client connected")
 
 	fmt.Fprintf(ctx.Writer, "event: connected\ndata: {\"status\": \"ok\"}\n\n")
-	ctx.Writer.Flush()
+	flusher.Flush()
 
 	defer func() {
 		mu.Lock()
+		defer mu.Unlock()
+
 		userClients := clients[userID]
 		for i, c := range userClients {
 			if c == client {
@@ -92,10 +102,13 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 				break
 			}
 		}
-		remaining := len(clients[userID])
-		mu.Unlock()
+
+		if len(clients[userID]) == 0 {
+			delete(clients, userID)
+		}
+
 		close(client.channel)
-		log.Info().Int64("user_id", userID).Int("connections", remaining).Msg("SSE client disconnected")
+		log.Info().Int64("user_id", userID).Int("connections", len(clients[userID])).Msg("SSE client disconnected")
 	}()
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -107,11 +120,11 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 			return
 		case <-ticker.C:
 			fmt.Fprintf(ctx.Writer, "event: ping\ndata: {}\n\n")
-			ctx.Writer.Flush()
+			flusher.Flush()
 		case notification := <-client.channel:
 			data, _ := json.Marshal(notification)
 			fmt.Fprintf(ctx.Writer, "event: notification\ndata: %s\n\n", data)
-			ctx.Writer.Flush()
+			flusher.Flush()
 		}
 	}
 }
@@ -165,5 +178,5 @@ func (server *Server) markNotificationRead(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse())
 }
