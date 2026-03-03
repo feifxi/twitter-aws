@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -16,18 +18,24 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog/log"
 )
 
 type Server struct {
 	config     config.Config
-	store      db.Querier
+	store      *db.Store
 	tokenMaker token.Maker
 	storage    service.StorageService
 	usecase    *usecase.Usecase
 	router     *gin.Engine
+	redis      *redis.Client
 }
 
-func NewServer(config config.Config, store db.Querier, redisClient *redis.Client) (*Server, error) {
+type idURIRequest struct {
+	ID int64 `uri:"id" binding:"required,min=1"`
+}
+
+func NewServer(config config.Config, store *db.Store, redisClient *redis.Client) (*Server, error) {
 	tokenMaker, err := token.NewJWTMaker(config.TokenSymmetricKey)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create token maker: %w", err)
@@ -43,10 +51,16 @@ func NewServer(config config.Config, store db.Querier, redisClient *redis.Client
 		store:      store,
 		tokenMaker: tokenMaker,
 		storage:    storageService,
+		redis:      redisClient,
 	}
 	server.usecase = usecase.New(config, store, tokenMaker, storageService, redisClient, server.publishNotification)
 
 	server.setupRouter()
+
+	if redisClient != nil {
+		go server.listenRedisNotifications()
+	}
+
 	return server, nil
 }
 
@@ -55,7 +69,15 @@ func (server *Server) setupRouter() {
 	router.Use(logger.GinMiddleware())
 	router.Use(gin.Recovery())
 
-	allowOrigins := []string{"http://localhost:3000"}
+	// Standard security headers.
+	router.Use(func(c *gin.Context) {
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Next()
+	})
+
+	var allowOrigins []string
 	if strings.TrimSpace(server.config.FrontendURL) != "" {
 		allowOrigins = strings.Split(server.config.FrontendURL, ",")
 		for i := range allowOrigins {
@@ -72,14 +94,18 @@ func (server *Server) setupRouter() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Basic anti-spam rate limiter.
-	router.Use(middleware.RateLimiter(5, 10))
+	// Default rate limiter.
+	router.Use(middleware.RateLimiter(20, 60))
 
-	router.POST("/api/v1/auth/google", server.loginGoogle)
-	router.POST("/api/v1/auth/refresh", server.refreshToken)
-	router.POST("/api/v1/auth/logout", server.logout)
+	// Stricter auth limits.
+	strictAuthLimiter := middleware.RateLimiter(2, 5)
+	router.POST("/api/v1/auth/google", strictAuthLimiter, server.loginGoogle)
+	router.POST("/api/v1/auth/refresh", strictAuthLimiter, server.refreshToken)
+	router.POST("/api/v1/auth/logout", strictAuthLimiter, server.logout)
 
-	publicRoutes := router.Group("/api/v1")
+	api := router.Group("/api/v1")
+
+	publicRoutes := api.Group("")
 	publicRoutes.Use(middleware.OptionalAuthMiddleware(server.tokenMaker))
 	publicRoutes.GET("/users/:id", server.getUser)
 	publicRoutes.GET("/users/:id/followers", server.listFollowers)
@@ -87,25 +113,25 @@ func (server *Server) setupRouter() {
 	publicRoutes.GET("/tweets/:id", server.getTweet)
 	publicRoutes.GET("/tweets/:id/replies", server.getReplies)
 	publicRoutes.GET("/feeds/global", server.getGlobalFeed)
-	publicRoutes.GET("/feeds/user/:userId", server.getUserFeed)
+	publicRoutes.GET("/feeds/user/:id", server.getUserFeed)
 	publicRoutes.GET("/search/users", server.searchUsers)
 	publicRoutes.GET("/search/tweets", server.searchTweets)
 	publicRoutes.GET("/search/hashtags", server.searchHashtags)
 	publicRoutes.GET("/discovery/trending", server.getTrendingHashtags)
 	publicRoutes.GET("/discovery/users", server.getSuggestedUsers)
 
-	authRoutes := router.Group("/api/v1")
+	strictWriteLimiter := middleware.RateLimiter(2, 5)
+	authRoutes := api.Group("")
 	authRoutes.Use(middleware.AuthMiddleware(server.tokenMaker))
 	authRoutes.GET("/auth/me", server.getMe)
-	authRoutes.GET("/users/me", server.getMe)
-	authRoutes.PUT("/users/profile", server.updateProfile)
-	authRoutes.POST("/users/:id/follow", server.followUser)
+	authRoutes.PUT("/users/profile", strictWriteLimiter, server.updateProfile)
+	authRoutes.POST("/users/:id/follow", strictWriteLimiter, server.followUser)
 	authRoutes.DELETE("/users/:id/follow", server.unfollowUser)
-	authRoutes.POST("/tweets", server.createTweet)
+	authRoutes.POST("/tweets", strictWriteLimiter, server.createTweet)
 	authRoutes.DELETE("/tweets/:id", server.deleteTweet)
-	authRoutes.POST("/tweets/:id/like", server.likeTweet)
+	authRoutes.POST("/tweets/:id/like", strictWriteLimiter, server.likeTweet)
 	authRoutes.DELETE("/tweets/:id/like", server.unlikeTweet)
-	authRoutes.POST("/tweets/:id/retweet", server.retweet)
+	authRoutes.POST("/tweets/:id/retweet", strictWriteLimiter, server.retweet)
 	authRoutes.DELETE("/tweets/:id/retweet", server.undoRetweet)
 	authRoutes.GET("/feeds/following", server.getFollowingFeed)
 	authRoutes.GET("/notifications", server.listNotifications)
@@ -121,11 +147,40 @@ func (server *Server) HTTPServer(address string) *http.Server {
 		Addr:         address,
 		Handler:      server.router,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
 	}
 }
 
+type redisNotificationPayload struct {
+	RecipientID  int64                `json:"recipientId"`
+	Notification notificationResponse `json:"notification"`
+}
+
 func (server *Server) publishNotification(notification db.Notification) {
-	sendNotificationToUser(notification.RecipientID, newNotificationResponse(notification))
+	hydrated, err := server.usecase.HydrateNotification(context.Background(), notification)
+	if err != nil {
+		log.Error().Err(err).Int64("notification_id", notification.ID).Int64("recipient_id", notification.RecipientID).Msg("Failed to hydrate notification for SSE; event not published")
+		return
+	}
+	server.broadcastToRedis(notification.RecipientID, newNotificationResponse(hydrated))
+}
+
+func (server *Server) broadcastToRedis(recipientID int64, notification notificationResponse) {
+	if server.redis == nil {
+		sendNotificationToUser(recipientID, notification)
+		return
+	}
+
+	payload := redisNotificationPayload{RecipientID: recipientID, Notification: notification}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal redis notification payload")
+		return
+	}
+
+	if err := server.redis.Publish(context.Background(), "notifications", data).Err(); err != nil {
+		log.Error().Err(err).Msg("Failed to publish notification to Redis")
+		sendNotificationToUser(recipientID, notification)
+	}
 }

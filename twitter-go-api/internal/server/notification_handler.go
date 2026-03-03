@@ -1,14 +1,15 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/chanombude/twitter-go-api/internal/db"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 )
 
 // A simple in-memory client manager for SSE.
@@ -20,33 +21,6 @@ var (
 	clients = make(map[int64][]*sseClient)
 	mu      sync.RWMutex
 )
-
-type notificationResponse struct {
-	ID          int64     `json:"id"`
-	RecipientID int64     `json:"recipientId"`
-	ActorID     int64     `json:"actorId"`
-	TweetID     *int64    `json:"tweetId,omitempty"`
-	Type        string    `json:"type"`
-	IsRead      bool      `json:"isRead"`
-	CreatedAt   time.Time `json:"createdAt"`
-}
-
-func newNotificationResponse(n db.Notification) notificationResponse {
-	var tweetID *int64
-	if n.TweetID.Valid {
-		tweetID = &n.TweetID.Int64
-	}
-
-	return notificationResponse{
-		ID:          n.ID,
-		RecipientID: n.RecipientID,
-		ActorID:     n.ActorID,
-		TweetID:     tweetID,
-		Type:        n.Type,
-		IsRead:      n.IsRead,
-		CreatedAt:   n.CreatedAt,
-	}
-}
 
 func sendNotificationToUser(userID int64, notification notificationResponse) {
 	mu.RLock()
@@ -60,7 +34,31 @@ func sendNotificationToUser(userID int64, notification notificationResponse) {
 		select {
 		case client.channel <- notification:
 		default:
+			log.Warn().Int64("user_id", userID).Int64("notification_id", notification.ID).Msg("Dropped SSE notification due to full client buffer")
 		}
+	}
+}
+
+// listenRedisNotifications subscribes to the Redis channel and forwards messages to local SSE clients.
+func (server *Server) listenRedisNotifications() {
+	if server.redis == nil {
+		log.Warn().Msg("Redis client is nil, SSE will only work for single-instance deployments")
+		return
+	}
+
+	ctx := context.Background()
+	pubsub := server.redis.Subscribe(ctx, "notifications")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+	for msg := range ch {
+		var payload redisNotificationPayload
+		if err := json.Unmarshal([]byte(msg.Payload), &payload); err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal notification from Redis")
+			continue
+		}
+
+		sendNotificationToUser(payload.RecipientID, payload.Notification)
 	}
 }
 
@@ -78,7 +76,9 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 
 	mu.Lock()
 	clients[userID] = append(clients[userID], client)
+	connectionCount := len(clients[userID])
 	mu.Unlock()
+	log.Info().Int64("user_id", userID).Int("connections", connectionCount).Msg("SSE client connected")
 
 	fmt.Fprintf(ctx.Writer, "event: connected\ndata: {\"status\": \"ok\"}\n\n")
 	ctx.Writer.Flush()
@@ -92,8 +92,10 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 				break
 			}
 		}
+		remaining := len(clients[userID])
 		mu.Unlock()
 		close(client.channel)
+		log.Info().Int64("user_id", userID).Int("connections", remaining).Msg("SSE client disconnected")
 	}()
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -128,11 +130,17 @@ func (server *Server) listNotifications(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	response := make([]notificationResponse, 0, len(notifications))
-	for _, n := range notifications {
-		response = append(response, newNotificationResponse(n))
+	total, err := server.usecase.CountNotifications(ctx, userID)
+	if err != nil {
+		writeError(ctx, err)
+		return
 	}
-	ctx.JSON(http.StatusOK, response)
+
+	content := make([]notificationResponse, 0, len(notifications))
+	for _, n := range notifications {
+		content = append(content, newNotificationResponse(n))
+	}
+	ctx.JSON(http.StatusOK, buildPageResponse(content, page, size, total))
 }
 
 func (server *Server) getUnreadNotificationCount(ctx *gin.Context) {

@@ -85,20 +85,8 @@ func (u *Usecase) RefreshSession(ctx context.Context, refreshToken string) (Auth
 
 	return AuthResult{
 		User: UserItem{
-			User: db.User{
-				ID:             user.ID,
-				Username:       user.Username,
-				Email:          user.Email,
-				DisplayName:    user.DisplayName,
-				Bio:            user.Bio,
-				AvatarUrl:      user.AvatarUrl,
-				Role:           user.Role,
-				Provider:       user.Provider,
-				FollowersCount: user.FollowersCount,
-				FollowingCount: user.FollowingCount,
-				CreatedAt:      user.CreatedAt,
-				UpdatedAt:      user.UpdatedAt,
-			},
+			User:        user.User,
+			IsFollowing: user.IsFollowing,
 		},
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
@@ -121,20 +109,8 @@ func (u *Usecase) GetMe(ctx context.Context, userID int64) (UserItem, error) {
 		return UserItem{}, err
 	}
 	return UserItem{
-		User: db.User{
-			ID:             user.ID,
-			Username:       user.Username,
-			Email:          user.Email,
-			DisplayName:    user.DisplayName,
-			Bio:            user.Bio,
-			AvatarUrl:      user.AvatarUrl,
-			Role:           user.Role,
-			Provider:       user.Provider,
-			FollowersCount: user.FollowersCount,
-			FollowingCount: user.FollowingCount,
-			CreatedAt:      user.CreatedAt,
-			UpdatedAt:      user.UpdatedAt,
-		},
+		User:        user.User,
+		IsFollowing: user.IsFollowing,
 	}, nil
 }
 

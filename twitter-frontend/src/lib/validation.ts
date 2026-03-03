@@ -14,7 +14,7 @@ export const tweetRequestSchema = z.object({
 
 /** Matches backend UpdateProfileRequest @Size constraints */
 export const updateProfileSchema = z.object({
-  displayName: z.string().max(100, 'Display name cannot exceed 100 characters').optional(),
+  displayName: z.string().max(30, 'Display name cannot exceed 30 characters').optional(),
   bio: z.string().max(160, 'Bio cannot exceed 160 characters').optional(),
 });
 

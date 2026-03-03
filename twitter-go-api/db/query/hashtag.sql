@@ -31,3 +31,23 @@ LIMIT $1;
 SELECT * FROM hashtags
 ORDER BY usage_count DESC, last_used_at DESC
 LIMIT $1;
+
+-- name: ListHashtagUsageToDecrementForDeleteRoot :many
+WITH RECURSIVE tweet_tree AS (
+  SELECT t.id FROM tweets t WHERE t.id = $1
+  UNION ALL
+  SELECT t.id FROM tweets t INNER JOIN tweet_tree tt ON t.parent_id = tt.id OR t.retweet_id = tt.id
+)
+SELECT th.hashtag_id, COUNT(th.hashtag_id)::integer AS decrement_by
+FROM tweet_hashtags th
+JOIN tweet_tree tt ON th.tweet_id = tt.id
+GROUP BY th.hashtag_id;
+
+-- name: DecrementHashtagUsageBy :exec
+UPDATE hashtags
+SET usage_count = GREATEST(0, usage_count - $2)
+WHERE id = $1;
+
+-- name: DeleteUnusedHashtag :exec
+DELETE FROM hashtags
+WHERE id = $1 AND usage_count <= 0;

@@ -4,7 +4,7 @@ CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
-    display_name VARCHAR(100),
+    display_name VARCHAR(30),
     bio VARCHAR(160),
     avatar_url TEXT,
     role VARCHAR(20) NOT NULL DEFAULT 'USER',

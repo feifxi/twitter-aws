@@ -13,6 +13,89 @@ import (
 	"github.com/lib/pq"
 )
 
+const countFollowingFeed = `-- name: CountFollowingFeed :one
+SELECT COUNT(*)
+FROM tweets t
+JOIN follows f ON t.user_id = f.following_id
+WHERE f.follower_id = $1
+  AND t.parent_id IS NULL
+`
+
+func (q *Queries) CountFollowingFeed(ctx context.Context, followerID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFollowingFeed, followerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countForYouFeed = `-- name: CountForYouFeed :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.parent_id IS NULL
+`
+
+func (q *Queries) CountForYouFeed(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countForYouFeed)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchTweetsByHashtag = `-- name: CountSearchTweetsByHashtag :one
+SELECT COUNT(*)
+FROM tweets t
+JOIN tweet_hashtags th ON th.tweet_id = t.id
+JOIN hashtags h ON h.id = th.hashtag_id
+WHERE LOWER(h.text) = LOWER($1)
+`
+
+func (q *Queries) CountSearchTweetsByHashtag(ctx context.Context, lower string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchTweetsByHashtag, lower)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchTweetsFullText = `-- name: CountSearchTweetsFullText :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.search_vector @@ to_tsquery('english', $1)
+`
+
+func (q *Queries) CountSearchTweetsFullText(ctx context.Context, toTsquery string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchTweetsFullText, toTsquery)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTweetReplies = `-- name: CountTweetReplies :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.parent_id = $1
+`
+
+func (q *Queries) CountTweetReplies(ctx context.Context, parentID sql.NullInt64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTweetReplies, parentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUserTweets = `-- name: CountUserTweets :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.user_id = $1
+  AND t.parent_id IS NULL
+`
+
+func (q *Queries) CountUserTweets(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUserTweets, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRetweet = `-- name: CreateRetweet :one
 WITH inserted AS (
   INSERT INTO tweets (user_id, retweet_id, media_type)
@@ -216,12 +299,12 @@ func (q *Queries) DeleteTweetByOwner(ctx context.Context, arg DeleteTweetByOwner
 }
 
 const getTweet = `-- name: GetTweet :one
-SELECT ts.id, ts.user_id, ts.content, ts.media_type, ts.media_url, ts.parent_id, ts.retweet_id, ts.reply_count, ts.retweet_count, ts.like_count, ts.created_at, ts.updated_at, ts.search_vector,
-  EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = ts.id AND tl.user_id = $2) AS is_liked,
-  EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = ts.id AND tr.user_id = $2) AS is_retweeted,
-  EXISTS(SELECT 1 FROM follows f WHERE f.following_id = ts.user_id AND f.follower_id = $2) AS is_following
-FROM tweets ts
-WHERE ts.id = $1 LIMIT 1
+SELECT t.id, t.user_id, t.content, t.media_type, t.media_url, t.parent_id, t.retweet_id, t.reply_count, t.retweet_count, t.like_count, t.created_at, t.updated_at, t.search_vector,
+  EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = $2) AS is_liked,
+  EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = $2) AS is_retweeted,
+  EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = $2) AS is_following
+FROM tweets t
+WHERE t.id = $1 LIMIT 1
 `
 
 type GetTweetParams struct {
@@ -230,41 +313,29 @@ type GetTweetParams struct {
 }
 
 type GetTweetRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) GetTweet(ctx context.Context, arg GetTweetParams) (GetTweetRow, error) {
 	row := q.db.QueryRowContext(ctx, getTweet, arg.ID, arg.ViewerID)
 	var i GetTweetRow
 	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Content,
-		&i.MediaType,
-		&i.MediaUrl,
-		&i.ParentID,
-		&i.RetweetID,
-		&i.ReplyCount,
-		&i.RetweetCount,
-		&i.LikeCount,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.SearchVector,
+		&i.Tweet.ID,
+		&i.Tweet.UserID,
+		&i.Tweet.Content,
+		&i.Tweet.MediaType,
+		&i.Tweet.MediaUrl,
+		&i.Tweet.ParentID,
+		&i.Tweet.RetweetID,
+		&i.Tweet.ReplyCount,
+		&i.Tweet.RetweetCount,
+		&i.Tweet.LikeCount,
+		&i.Tweet.CreatedAt,
+		&i.Tweet.UpdatedAt,
+		&i.Tweet.SearchVector,
 		&i.IsLiked,
 		&i.IsRetweeted,
 		&i.IsFollowing,
@@ -287,22 +358,10 @@ type GetTweetsByIDsParams struct {
 }
 
 type GetTweetsByIDsRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) GetTweetsByIDs(ctx context.Context, arg GetTweetsByIDsParams) ([]GetTweetsByIDsRow, error) {
@@ -315,19 +374,19 @@ func (q *Queries) GetTweetsByIDs(ctx context.Context, arg GetTweetsByIDsParams) 
 	for rows.Next() {
 		var i GetTweetsByIDsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,
@@ -409,22 +468,10 @@ type ListFollowingFeedParams struct {
 }
 
 type ListFollowingFeedRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) ListFollowingFeed(ctx context.Context, arg ListFollowingFeedParams) ([]ListFollowingFeedRow, error) {
@@ -442,19 +489,19 @@ func (q *Queries) ListFollowingFeed(ctx context.Context, arg ListFollowingFeedPa
 	for rows.Next() {
 		var i ListFollowingFeedRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,
@@ -493,22 +540,10 @@ type ListForYouFeedParams struct {
 }
 
 type ListForYouFeedRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) ListForYouFeed(ctx context.Context, arg ListForYouFeedParams) ([]ListForYouFeedRow, error) {
@@ -521,19 +556,19 @@ func (q *Queries) ListForYouFeed(ctx context.Context, arg ListForYouFeedParams) 
 	for rows.Next() {
 		var i ListForYouFeedRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,
@@ -541,6 +576,44 @@ func (q *Queries) ListForYouFeed(ctx context.Context, arg ListForYouFeedParams) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMediaUrlsInThread = `-- name: ListMediaUrlsInThread :many
+WITH RECURSIVE tweet_tree AS (
+  SELECT t.id, t.media_url
+  FROM tweets t
+  WHERE t.id = $1
+  UNION ALL
+  SELECT t.id, t.media_url
+  FROM tweets t
+  INNER JOIN tweet_tree tt ON t.parent_id = tt.id
+)
+SELECT media_url
+FROM tweet_tree
+WHERE media_url IS NOT NULL AND media_url <> ''
+`
+
+func (q *Queries) ListMediaUrlsInThread(ctx context.Context, id int64) ([]sql.NullString, error) {
+	rows, err := q.db.QueryContext(ctx, listMediaUrlsInThread, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []sql.NullString{}
+	for rows.Next() {
+		var media_url sql.NullString
+		if err := rows.Scan(&media_url); err != nil {
+			return nil, err
+		}
+		items = append(items, media_url)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -570,22 +643,10 @@ type ListTweetRepliesParams struct {
 }
 
 type ListTweetRepliesRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) ListTweetReplies(ctx context.Context, arg ListTweetRepliesParams) ([]ListTweetRepliesRow, error) {
@@ -603,19 +664,19 @@ func (q *Queries) ListTweetReplies(ctx context.Context, arg ListTweetRepliesPara
 	for rows.Next() {
 		var i ListTweetRepliesRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,
@@ -653,22 +714,10 @@ type ListUserTweetsParams struct {
 }
 
 type ListUserTweetsRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) ListUserTweets(ctx context.Context, arg ListUserTweetsParams) ([]ListUserTweetsRow, error) {
@@ -686,19 +735,19 @@ func (q *Queries) ListUserTweets(ctx context.Context, arg ListUserTweetsParams) 
 	for rows.Next() {
 		var i ListUserTweetsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,
@@ -737,22 +786,10 @@ type SearchTweetsByHashtagParams struct {
 }
 
 type SearchTweetsByHashtagRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) SearchTweetsByHashtag(ctx context.Context, arg SearchTweetsByHashtagParams) ([]SearchTweetsByHashtagRow, error) {
@@ -770,19 +807,19 @@ func (q *Queries) SearchTweetsByHashtag(ctx context.Context, arg SearchTweetsByH
 	for rows.Next() {
 		var i SearchTweetsByHashtagRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,
@@ -819,22 +856,10 @@ type SearchTweetsFullTextParams struct {
 }
 
 type SearchTweetsFullTextRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
-	IsLiked      bool           `json:"is_liked"`
-	IsRetweeted  bool           `json:"is_retweeted"`
-	IsFollowing  bool           `json:"is_following"`
+	Tweet       Tweet `json:"tweet"`
+	IsLiked     bool  `json:"is_liked"`
+	IsRetweeted bool  `json:"is_retweeted"`
+	IsFollowing bool  `json:"is_following"`
 }
 
 func (q *Queries) SearchTweetsFullText(ctx context.Context, arg SearchTweetsFullTextParams) ([]SearchTweetsFullTextRow, error) {
@@ -852,19 +877,19 @@ func (q *Queries) SearchTweetsFullText(ctx context.Context, arg SearchTweetsFull
 	for rows.Next() {
 		var i SearchTweetsFullTextRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Content,
-			&i.MediaType,
-			&i.MediaUrl,
-			&i.ParentID,
-			&i.RetweetID,
-			&i.ReplyCount,
-			&i.RetweetCount,
-			&i.LikeCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SearchVector,
+			&i.Tweet.ID,
+			&i.Tweet.UserID,
+			&i.Tweet.Content,
+			&i.Tweet.MediaType,
+			&i.Tweet.MediaUrl,
+			&i.Tweet.ParentID,
+			&i.Tweet.RetweetID,
+			&i.Tweet.ReplyCount,
+			&i.Tweet.RetweetCount,
+			&i.Tweet.LikeCount,
+			&i.Tweet.CreatedAt,
+			&i.Tweet.UpdatedAt,
+			&i.Tweet.SearchVector,
 			&i.IsLiked,
 			&i.IsRetweeted,
 			&i.IsFollowing,

@@ -1,36 +1,66 @@
 package server
 
 import (
-	"encoding/json"
+	"mime/multipart"
 	"net/http"
-	"strings"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
 
-func (server *Server) getMe(ctx *gin.Context) {
+type updateProfileRequest struct {
+	DisplayName *string               `form:"displayName" binding:"omitempty,max=30"`
+	Bio         *string               `form:"bio" binding:"omitempty,max=160"`
+	Avatar      *multipart.FileHeader `form:"avatar"`
+}
+
+func (server *Server) updateProfile(ctx *gin.Context) {
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {
 		return
 	}
 
-	user, err := server.usecase.GetMe(ctx, userID)
+	var req updateProfileRequest
+	if err := ctx.ShouldBind(&req); err != nil {
+		writeError(ctx, err)
+		return
+	}
+
+	input := usecase.UpdateProfileInput{
+		DisplayName: req.DisplayName,
+		Bio:         req.Bio,
+	}
+
+	// Check if avatar is provided
+	if req.Avatar != nil {
+		file, err := req.Avatar.Open()
+		if err != nil {
+			writeError(ctx, apperr.BadRequest("failed to open avatar file"))
+			return
+		}
+		defer file.Close()
+
+		contentType := req.Avatar.Header.Get("Content-Type")
+
+		input.Avatar = &usecase.AvatarUpload{
+			Filename:    req.Avatar.Filename,
+			ContentType: contentType,
+			Reader:      file,
+		}
+	}
+
+	updatedUser, err := server.usecase.UpdateProfile(ctx, userID, input)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, newUserResponse(user))
-}
-
-type getUserRequest struct {
-	ID int64 `uri:"id" binding:"required,min=1"`
+	ctx.JSON(http.StatusOK, newUserResponse(usecase.UserItem{User: updatedUser}))
 }
 
 func (server *Server) getUser(ctx *gin.Context) {
-	var req getUserRequest
+	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		writeError(ctx, err)
 		return
@@ -50,68 +80,8 @@ func (server *Server) getUser(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, newUserResponse(user))
 }
 
-type updateProfileRequest struct {
-	Bio         *string `json:"bio"`
-	DisplayName *string `json:"displayName"`
-}
-
-func (server *Server) updateProfile(ctx *gin.Context) {
-	userID, ok := mustCurrentUserID(ctx)
-	if !ok {
-		return
-	}
-
-	request := updateProfileRequest{}
-	input := usecase.UpdateProfileInput{}
-
-	if strings.HasPrefix(ctx.GetHeader("Content-Type"), "multipart/form-data") {
-		if err := ctx.Request.ParseMultipartForm(20 << 20); err != nil {
-			writeError(ctx, apperr.BadRequest("invalid multipart payload"))
-			return
-		}
-
-		if dataBlob := ctx.Request.FormValue("data"); dataBlob != "" {
-			if err := json.Unmarshal([]byte(dataBlob), &request); err != nil {
-				writeError(ctx, apperr.BadRequest("invalid json in data field"))
-				return
-			}
-		}
-
-		file, header, err := ctx.Request.FormFile("avatar")
-		if err == nil {
-			defer file.Close()
-			contentType := header.Header.Get("Content-Type")
-			if !strings.HasPrefix(contentType, "image/") {
-				writeError(ctx, apperr.BadRequest("avatar must be an image"))
-				return
-			}
-			input.Avatar = &usecase.AvatarUpload{
-				Filename:    header.Filename,
-				ContentType: contentType,
-				Reader:      file,
-			}
-		}
-	} else {
-		if err := ctx.ShouldBindJSON(&request); err != nil {
-			writeError(ctx, err)
-			return
-		}
-	}
-
-	input.Bio = request.Bio
-	input.DisplayName = request.DisplayName
-
-	updatedUser, err := server.usecase.UpdateProfile(ctx, userID, input)
-	if err != nil {
-		writeError(ctx, err)
-		return
-	}
-
-	ctx.JSON(http.StatusOK, newUserResponse(usecase.UserItem{User: updatedUser}))
-}
-
 func (server *Server) followUser(ctx *gin.Context) {
-	var req getUserRequest
+	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		writeError(ctx, err)
 		return
@@ -135,7 +105,7 @@ func (server *Server) followUser(ctx *gin.Context) {
 }
 
 func (server *Server) unfollowUser(ctx *gin.Context) {
-	var req getUserRequest
+	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		writeError(ctx, err)
 		return
@@ -153,12 +123,8 @@ func (server *Server) unfollowUser(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-type listFollowRequest struct {
-	ID int64 `uri:"id" binding:"required,min=1"`
-}
-
 func (server *Server) listFollowers(ctx *gin.Context) {
-	var req listFollowRequest
+	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		writeError(ctx, err)
 		return
@@ -178,16 +144,21 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
+	total, err := server.usecase.CountFollowers(ctx, req.ID)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
 
 	response := make([]userResponse, 0, len(users))
 	for _, user := range users {
 		response = append(response, newUserResponse(user))
 	}
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }
 
 func (server *Server) listFollowing(ctx *gin.Context) {
-	var req listFollowRequest
+	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		writeError(ctx, err)
 		return
@@ -207,10 +178,15 @@ func (server *Server) listFollowing(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
+	total, err := server.usecase.CountFollowing(ctx, req.ID)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
 
 	response := make([]userResponse, 0, len(users))
 	for _, user := range users {
 		response = append(response, newUserResponse(user))
 	}
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }

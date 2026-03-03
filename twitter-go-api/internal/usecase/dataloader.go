@@ -2,28 +2,25 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
 // populateTweetItems acts as a simple DataLoader to batch fetch authors and parent/original tweets,
 // resolving the N+1 query problem.
-func (u *Usecase) populateTweetItems(ctx context.Context, tweets []db.Tweet, viewerID *int64) ([]TweetItem, error) {
-	if len(tweets) == 0 {
+func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydrationInput, viewerID *int64) ([]TweetItem, error) {
+	if len(inputs) == 0 {
 		return []TweetItem{}, nil
 	}
 
-	var vID sql.NullInt64
-	if viewerID != nil {
-		vID = sql.NullInt64{Int64: *viewerID, Valid: true}
-	}
+	vID := nullViewerID(viewerID)
 
 	// 1. Collect unique IDs
 	userIDsMap := make(map[int64]bool)
 	tweetIDsMap := make(map[int64]bool)
 
-	for _, t := range tweets {
+	for _, in := range inputs {
+		t := in.Tweet
 		userIDsMap[t.UserID] = true
 		if t.ParentID.Valid {
 			tweetIDsMap[t.ParentID.Int64] = true
@@ -55,23 +52,7 @@ func (u *Usecase) populateTweetItems(ctx context.Context, tweets []db.Tweet, vie
 
 	usersMap := make(map[int64]UserItem)
 	for _, rawUser := range users {
-		usersMap[rawUser.ID] = UserItem{
-			User: db.User{
-				ID:             rawUser.ID,
-				Username:       rawUser.Username,
-				Email:          rawUser.Email,
-				DisplayName:    rawUser.DisplayName,
-				Bio:            rawUser.Bio,
-				AvatarUrl:      rawUser.AvatarUrl,
-				Role:           rawUser.Role,
-				Provider:       rawUser.Provider,
-				FollowersCount: rawUser.FollowersCount,
-				FollowingCount: rawUser.FollowingCount,
-				CreatedAt:      rawUser.CreatedAt,
-				UpdatedAt:      rawUser.UpdatedAt,
-			},
-			IsFollowing: rawUser.IsFollowing,
-		}
+		usersMap[rawUser.User.ID] = UserItem{User: rawUser.User, IsFollowing: rawUser.IsFollowing}
 	}
 
 	// 3. Fetch Referenced Tweets (Parents / Originals)
@@ -91,20 +72,7 @@ func (u *Usecase) populateTweetItems(ctx context.Context, tweets []db.Tweet, vie
 		// For a simple DataLoader, one level of depth is usually enough.
 		refTweetsSlice := make([]db.Tweet, 0, len(rawRefTweets))
 		for _, rt := range rawRefTweets {
-			refTweetsSlice = append(refTweetsSlice, db.Tweet{
-				ID:           rt.ID,
-				UserID:       rt.UserID,
-				Content:      rt.Content,
-				MediaType:    rt.MediaType,
-				MediaUrl:     rt.MediaUrl,
-				ParentID:     rt.ParentID,
-				RetweetID:    rt.RetweetID,
-				ReplyCount:   rt.ReplyCount,
-				RetweetCount: rt.RetweetCount,
-				LikeCount:    rt.LikeCount,
-				CreatedAt:    rt.CreatedAt,
-				UpdatedAt:    rt.UpdatedAt,
-			})
+			refTweetsSlice = append(refTweetsSlice, rt.Tweet)
 		}
 
 		// To avoid deep recursion, we'll manually attach authors to the ref tweets here.
@@ -127,23 +95,7 @@ func (u *Usecase) populateTweetItems(ctx context.Context, tweets []db.Tweet, vie
 			})
 			if err == nil {
 				for _, rawUser := range moreUsers {
-					usersMap[rawUser.ID] = UserItem{
-						User: db.User{
-							ID:             rawUser.ID,
-							Username:       rawUser.Username,
-							Email:          rawUser.Email,
-							DisplayName:    rawUser.DisplayName,
-							Bio:            rawUser.Bio,
-							AvatarUrl:      rawUser.AvatarUrl,
-							Role:           rawUser.Role,
-							Provider:       rawUser.Provider,
-							FollowersCount: rawUser.FollowersCount,
-							FollowingCount: rawUser.FollowingCount,
-							CreatedAt:      rawUser.CreatedAt,
-							UpdatedAt:      rawUser.UpdatedAt,
-						},
-						IsFollowing: rawUser.IsFollowing,
-					}
+					usersMap[rawUser.User.ID] = UserItem{User: rawUser.User, IsFollowing: rawUser.IsFollowing}
 				}
 			}
 		}
@@ -163,16 +115,15 @@ func (u *Usecase) populateTweetItems(ctx context.Context, tweets []db.Tweet, vie
 	}
 
 	// 4. Assemble final result
-	result := make([]TweetItem, 0, len(tweets))
-
-	// Fast lookup helper for the caller side mapper (since the caller passes db.Tweet but they are actually generic structs with is_liked etc embedded)
-	// We will just map the base db.Tweet logic correctly. The caller needs to map IsLiked, IsRetweeted, IsFollowing manually if they didn't pass it into this function.
-	// We'll update this function signature to take an interface or intermediate strict, but for now we'll assemble the base.
-
-	for _, t := range tweets {
+	result := make([]TweetItem, 0, len(inputs))
+	for _, in := range inputs {
+		t := in.Tweet
 		item := TweetItem{
-			Tweet:  t,
-			Author: usersMap[t.UserID],
+			Tweet:       t,
+			Author:      usersMap[t.UserID],
+			IsLiked:     in.IsLiked,
+			IsRetweeted: in.IsRetweeted,
+			IsFollowing: in.IsFollowing,
 		}
 
 		if t.ParentID.Valid {

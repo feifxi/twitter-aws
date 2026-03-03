@@ -3,7 +3,9 @@ package usecase
 import (
 	"context"
 	"database/sql"
+	"strings"
 
+	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
@@ -22,32 +24,12 @@ type UpdateProfileInput struct {
 }
 
 func (u *Usecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {
-	vID := sql.NullInt64{Valid: false}
-	if viewerID != nil {
-		vID = sql.NullInt64{Int64: *viewerID, Valid: true}
-	}
-	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID})
+	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: nullViewerID(viewerID)})
 	if err != nil {
 		return UserItem{}, err
 	}
 
-	return UserItem{
-		User: db.User{
-			ID:             user.ID,
-			Username:       user.Username,
-			Email:          user.Email,
-			DisplayName:    user.DisplayName,
-			Bio:            user.Bio,
-			AvatarUrl:      user.AvatarUrl,
-			Role:           user.Role,
-			Provider:       user.Provider,
-			FollowersCount: user.FollowersCount,
-			FollowingCount: user.FollowingCount,
-			CreatedAt:      user.CreatedAt,
-			UpdatedAt:      user.UpdatedAt,
-		},
-		IsFollowing: user.IsFollowing,
-	}, nil
+	return UserItem{User: user.User, IsFollowing: user.IsFollowing}, nil
 }
 
 func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateProfileInput) (db.User, error) {
@@ -56,9 +38,14 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 		return db.User{}, err
 	}
 
-	newAvatar := existingUser.AvatarUrl
+	newAvatar := existingUser.User.AvatarUrl
 	uploadedAvatarURL := ""
 	if input.Avatar != nil {
+		contentType := strings.ToLower(input.Avatar.ContentType)
+		if !strings.HasPrefix(contentType, "image/") {
+			return db.User{}, apperr.BadRequest("avatar must be an image")
+		}
+
 		uploadedAvatarURL, err = u.storage.UploadFile(ctx, input.Avatar.Reader, input.Avatar.Filename, input.Avatar.ContentType)
 		if err != nil {
 			return db.User{}, err
@@ -66,12 +53,12 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 		newAvatar = sql.NullString{String: uploadedAvatarURL, Valid: true}
 	}
 
-	bio := existingUser.Bio
+	bio := existingUser.User.Bio
 	if input.Bio != nil {
 		bio = nullStringFromPtr(input.Bio)
 	}
 
-	displayName := existingUser.DisplayName
+	displayName := existingUser.User.DisplayName
 	if input.DisplayName != nil {
 		displayName = nullStringFromPtr(input.DisplayName)
 	}
@@ -89,8 +76,8 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 		return db.User{}, err
 	}
 
-	if uploadedAvatarURL != "" && existingUser.AvatarUrl.Valid {
-		_ = u.storage.DeleteFile(ctx, existingUser.AvatarUrl.String)
+	if uploadedAvatarURL != "" && existingUser.User.AvatarUrl.Valid {
+		_ = u.storage.DeleteFile(ctx, existingUser.User.AvatarUrl.String)
 	}
 
 	return updatedUser, nil
@@ -102,94 +89,77 @@ func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64
 		return false, err
 	}
 
-	inserted, err := u.store.FollowUser(ctx, db.FollowUserParams{FollowerID: followerID, FollowingID: targetUserID})
+	var inserted bool
+	var pendingNotification db.Notification
+	err = u.store.ExecTx(ctx, func(q *db.Queries) error {
+		var err error
+		inserted, err = q.FollowUser(ctx, db.FollowUserParams{FollowerID: followerID, FollowingID: targetUserID})
+		if err != nil {
+			return err
+		}
+
+		if inserted {
+			pendingNotification, _ = u.createNotification(ctx, q, targetUser.User.ID, followerID, nil, NotifTypeFollow)
+		}
+		return nil
+	})
 	if err != nil {
 		return false, err
 	}
 
-	if inserted {
-		_ = u.createAndDispatchNotification(ctx, targetUser.ID, followerID, nil, "FOLLOW")
-	}
+	u.dispatchNotification(pendingNotification)
 	return inserted, nil
 }
 
 func (u *Usecase) UnfollowUser(ctx context.Context, followerID, targetUserID int64) error {
+	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: sql.NullInt64{Valid: false}}); err != nil {
+		return err
+	}
+
 	_, err := u.store.UnfollowUser(ctx, db.UnfollowUserParams{FollowerID: followerID, FollowingID: targetUserID})
 	return err
 }
 
 func (u *Usecase) ListFollowers(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
-	vID := sql.NullInt64{Valid: false}
-	if viewerID != nil {
-		vID = sql.NullInt64{Int64: *viewerID, Valid: true}
-	}
 	users, err := u.store.ListFollowersUsers(ctx, db.ListFollowersUsersParams{
 		FollowingID: targetUserID,
 		Limit:       size,
 		Offset:      page * size,
-		ViewerID:    vID,
+		ViewerID:    nullViewerID(viewerID),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]UserItem, 0, len(users))
-	for _, u := range users {
-		items = append(items, UserItem{
-			User: db.User{
-				ID:             u.ID,
-				Username:       u.Username,
-				Email:          u.Email,
-				DisplayName:    u.DisplayName,
-				Bio:            u.Bio,
-				AvatarUrl:      u.AvatarUrl,
-				Role:           u.Role,
-				Provider:       u.Provider,
-				FollowersCount: u.FollowersCount,
-				FollowingCount: u.FollowingCount,
-				CreatedAt:      u.CreatedAt,
-				UpdatedAt:      u.UpdatedAt,
-			},
-			IsFollowing: u.IsFollowing,
-		})
+	for _, r := range users {
+		items = append(items, UserItem{User: r.User, IsFollowing: r.IsFollowing})
 	}
 	return items, nil
 }
 
 func (u *Usecase) ListFollowing(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
-	vID := sql.NullInt64{Valid: false}
-	if viewerID != nil {
-		vID = sql.NullInt64{Int64: *viewerID, Valid: true}
-	}
 	users, err := u.store.ListFollowingUsers(ctx, db.ListFollowingUsersParams{
 		FollowerID: targetUserID,
 		Limit:      size,
 		Offset:     page * size,
-		ViewerID:   vID,
+		ViewerID:   nullViewerID(viewerID),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]UserItem, 0, len(users))
-	for _, u := range users {
-		items = append(items, UserItem{
-			User: db.User{
-				ID:             u.ID,
-				Username:       u.Username,
-				Email:          u.Email,
-				DisplayName:    u.DisplayName,
-				Bio:            u.Bio,
-				AvatarUrl:      u.AvatarUrl,
-				Role:           u.Role,
-				Provider:       u.Provider,
-				FollowersCount: u.FollowersCount,
-				FollowingCount: u.FollowingCount,
-				CreatedAt:      u.CreatedAt,
-				UpdatedAt:      u.UpdatedAt,
-			},
-			IsFollowing: u.IsFollowing,
-		})
+	for _, r := range users {
+		items = append(items, UserItem{User: r.User, IsFollowing: r.IsFollowing})
 	}
 	return items, nil
+}
+
+func (u *Usecase) CountFollowers(ctx context.Context, targetUserID int64) (int64, error) {
+	return u.store.CountFollowersUsers(ctx, targetUserID)
+}
+
+func (u *Usecase) CountFollowing(ctx context.Context, targetUserID int64) (int64, error) {
+	return u.store.CountFollowingUsers(ctx, targetUserID)
 }

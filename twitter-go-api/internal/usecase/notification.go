@@ -178,3 +178,20 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 
 	return items, nil
 }
+
+func (u *Usecase) createAndDispatchNotification(ctx context.Context, recipientID, actorID int64, tweetID *int64, notifType string) error {
+	if recipientID == actorID {
+		return nil
+	}
+	var tID sql.NullInt64
+	if tweetID != nil {
+		tID = sql.NullInt64{Int64: *tweetID, Valid: true}
+	}
+	_, err := u.store.CreateNotification(ctx, db.CreateNotificationParams{
+		RecipientID: recipientID,
+		ActorID:     actorID,
+		TweetID:     tID,
+		Type:        notifType,
+	})
+	return err
+}

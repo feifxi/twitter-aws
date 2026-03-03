@@ -20,11 +20,16 @@ func (server *Server) getGlobalFeed(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
+	total, err := server.usecase.CountGlobalFeed(ctx)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
 	response := make([]tweetResponse, 0, len(tweets))
 	for _, t := range tweets {
 		response = append(response, newTweetResponse(t))
 	}
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }
 
 func (server *Server) getFollowingFeed(ctx *gin.Context) {
@@ -41,19 +46,20 @@ func (server *Server) getFollowingFeed(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
+	total, err := server.usecase.CountFollowingFeed(ctx, userID)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
 	response := make([]tweetResponse, 0, len(tweets))
 	for _, t := range tweets {
 		response = append(response, newTweetResponse(t))
 	}
-	ctx.JSON(http.StatusOK, response)
-}
-
-type userFeedRequest struct {
-	UserID int64 `uri:"userId" binding:"required,min=1"`
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }
 
 func (server *Server) getUserFeed(ctx *gin.Context) {
-	var req userFeedRequest
+	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		writeError(ctx, err)
 		return
@@ -66,7 +72,12 @@ func (server *Server) getUserFeed(ctx *gin.Context) {
 	if id, ok := getCurrentUserID(ctx); ok {
 		viewerID = &id
 	}
-	tweets, err := server.usecase.GetUserFeed(ctx, req.UserID, page, size, viewerID)
+	tweets, err := server.usecase.GetUserFeed(ctx, req.ID, page, size, viewerID)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+	total, err := server.usecase.CountUserFeed(ctx, req.ID)
 	if err != nil {
 		writeError(ctx, err)
 		return
@@ -75,5 +86,5 @@ func (server *Server) getUserFeed(ctx *gin.Context) {
 	for _, t := range tweets {
 		response = append(response, newTweetResponse(t))
 	}
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }

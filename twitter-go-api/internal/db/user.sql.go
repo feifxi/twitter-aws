@@ -8,10 +8,73 @@ package db
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/lib/pq"
 )
+
+const countFollowersUsers = `-- name: CountFollowersUsers :one
+SELECT COUNT(*)
+FROM follows f
+WHERE f.following_id = $1
+`
+
+func (q *Queries) CountFollowersUsers(ctx context.Context, followingID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFollowersUsers, followingID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countFollowingUsers = `-- name: CountFollowingUsers :one
+SELECT COUNT(*)
+FROM follows f
+WHERE f.follower_id = $1
+`
+
+func (q *Queries) CountFollowingUsers(ctx context.Context, followerID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFollowingUsers, followerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchUsers = `-- name: CountSearchUsers :one
+SELECT COUNT(*)
+FROM users u
+WHERE u.username ILIKE '%' || $1 || '%'
+   OR u.display_name ILIKE '%' || $1 || '%'
+`
+
+func (q *Queries) CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchUsers, dollar_1)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSuggestedUsers = `-- name: CountSuggestedUsers :one
+SELECT COUNT(*)
+FROM users u
+WHERE u.id != $1
+`
+
+func (q *Queries) CountSuggestedUsers(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSuggestedUsers, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTopUsers = `-- name: CountTopUsers :one
+SELECT COUNT(*) FROM users
+`
+
+func (q *Queries) CountTopUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTopUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
@@ -73,37 +136,26 @@ type GetUserParams struct {
 }
 
 type GetUserRow struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	IsFollowing    bool           `json:"is_following"`
+	User        User `json:"user"`
+	IsFollowing bool `json:"is_following"`
 }
 
 func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (GetUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getUser, arg.ID, arg.ViewerID)
 	var i GetUserRow
 	err := row.Scan(
-		&i.ID,
-		&i.Username,
-		&i.Email,
-		&i.DisplayName,
-		&i.Bio,
-		&i.AvatarUrl,
-		&i.Role,
-		&i.Provider,
-		&i.FollowersCount,
-		&i.FollowingCount,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&i.User.ID,
+		&i.User.Username,
+		&i.User.Email,
+		&i.User.DisplayName,
+		&i.User.Bio,
+		&i.User.AvatarUrl,
+		&i.User.Role,
+		&i.User.Provider,
+		&i.User.FollowersCount,
+		&i.User.FollowingCount,
+		&i.User.CreatedAt,
+		&i.User.UpdatedAt,
 		&i.IsFollowing,
 	)
 	return i, err
@@ -172,19 +224,8 @@ type GetUsersByIDsParams struct {
 }
 
 type GetUsersByIDsRow struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	IsFollowing    bool           `json:"is_following"`
+	User        User `json:"user"`
+	IsFollowing bool `json:"is_following"`
 }
 
 func (q *Queries) GetUsersByIDs(ctx context.Context, arg GetUsersByIDsParams) ([]GetUsersByIDsRow, error) {
@@ -197,18 +238,18 @@ func (q *Queries) GetUsersByIDs(ctx context.Context, arg GetUsersByIDsParams) ([
 	for rows.Next() {
 		var i GetUsersByIDsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Username,
-			&i.Email,
-			&i.DisplayName,
-			&i.Bio,
-			&i.AvatarUrl,
-			&i.Role,
-			&i.Provider,
-			&i.FollowersCount,
-			&i.FollowingCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.Email,
+			&i.User.DisplayName,
+			&i.User.Bio,
+			&i.User.AvatarUrl,
+			&i.User.Role,
+			&i.User.Provider,
+			&i.User.FollowersCount,
+			&i.User.FollowingCount,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
 			&i.IsFollowing,
 		); err != nil {
 			return nil, err
@@ -260,19 +301,8 @@ type ListFollowersUsersParams struct {
 }
 
 type ListFollowersUsersRow struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	IsFollowing    bool           `json:"is_following"`
+	User        User `json:"user"`
+	IsFollowing bool `json:"is_following"`
 }
 
 func (q *Queries) ListFollowersUsers(ctx context.Context, arg ListFollowersUsersParams) ([]ListFollowersUsersRow, error) {
@@ -290,18 +320,18 @@ func (q *Queries) ListFollowersUsers(ctx context.Context, arg ListFollowersUsers
 	for rows.Next() {
 		var i ListFollowersUsersRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Username,
-			&i.Email,
-			&i.DisplayName,
-			&i.Bio,
-			&i.AvatarUrl,
-			&i.Role,
-			&i.Provider,
-			&i.FollowersCount,
-			&i.FollowingCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.Email,
+			&i.User.DisplayName,
+			&i.User.Bio,
+			&i.User.AvatarUrl,
+			&i.User.Role,
+			&i.User.Provider,
+			&i.User.FollowersCount,
+			&i.User.FollowingCount,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
 			&i.IsFollowing,
 		); err != nil {
 			return nil, err
@@ -335,19 +365,8 @@ type ListFollowingUsersParams struct {
 }
 
 type ListFollowingUsersRow struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	IsFollowing    bool           `json:"is_following"`
+	User        User `json:"user"`
+	IsFollowing bool `json:"is_following"`
 }
 
 func (q *Queries) ListFollowingUsers(ctx context.Context, arg ListFollowingUsersParams) ([]ListFollowingUsersRow, error) {
@@ -365,18 +384,18 @@ func (q *Queries) ListFollowingUsers(ctx context.Context, arg ListFollowingUsers
 	for rows.Next() {
 		var i ListFollowingUsersRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Username,
-			&i.Email,
-			&i.DisplayName,
-			&i.Bio,
-			&i.AvatarUrl,
-			&i.Role,
-			&i.Provider,
-			&i.FollowersCount,
-			&i.FollowingCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.Email,
+			&i.User.DisplayName,
+			&i.User.Bio,
+			&i.User.AvatarUrl,
+			&i.User.Role,
+			&i.User.Provider,
+			&i.User.FollowersCount,
+			&i.User.FollowingCount,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
 			&i.IsFollowing,
 		); err != nil {
 			return nil, err
@@ -410,19 +429,8 @@ type ListSuggestedUsersParams struct {
 }
 
 type ListSuggestedUsersRow struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	IsFollowing    bool           `json:"is_following"`
+	User        User `json:"user"`
+	IsFollowing bool `json:"is_following"`
 }
 
 func (q *Queries) ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsersParams) ([]ListSuggestedUsersRow, error) {
@@ -440,18 +448,18 @@ func (q *Queries) ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsers
 	for rows.Next() {
 		var i ListSuggestedUsersRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Username,
-			&i.Email,
-			&i.DisplayName,
-			&i.Bio,
-			&i.AvatarUrl,
-			&i.Role,
-			&i.Provider,
-			&i.FollowersCount,
-			&i.FollowingCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.Email,
+			&i.User.DisplayName,
+			&i.User.Bio,
+			&i.User.AvatarUrl,
+			&i.User.Role,
+			&i.User.Provider,
+			&i.User.FollowersCount,
+			&i.User.FollowingCount,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
 			&i.IsFollowing,
 		); err != nil {
 			return nil, err
@@ -532,19 +540,8 @@ type SearchUsersParams struct {
 }
 
 type SearchUsersRow struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	IsFollowing    bool           `json:"is_following"`
+	User        User `json:"user"`
+	IsFollowing bool `json:"is_following"`
 }
 
 func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error) {
@@ -562,18 +559,18 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Sea
 	for rows.Next() {
 		var i SearchUsersRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.Username,
-			&i.Email,
-			&i.DisplayName,
-			&i.Bio,
-			&i.AvatarUrl,
-			&i.Role,
-			&i.Provider,
-			&i.FollowersCount,
-			&i.FollowingCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.Email,
+			&i.User.DisplayName,
+			&i.User.Bio,
+			&i.User.AvatarUrl,
+			&i.User.Role,
+			&i.User.Provider,
+			&i.User.FollowersCount,
+			&i.User.FollowingCount,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
 			&i.IsFollowing,
 		); err != nil {
 			return nil, err

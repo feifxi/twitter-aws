@@ -12,6 +12,10 @@ WHERE recipient_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: CountNotifications :one
+SELECT COUNT(*) FROM notifications
+WHERE recipient_id = $1;
+
 -- name: MarkAllNotificationsRead :exec
 UPDATE notifications
 SET is_read = TRUE

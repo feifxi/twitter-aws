@@ -12,11 +12,6 @@ type googleLoginRequest struct {
 	IDToken string `json:"idToken" binding:"required"`
 }
 
-type authResponse struct {
-	AccessToken string       `json:"accessToken"`
-	User        userResponse `json:"user"`
-}
-
 func (server *Server) loginGoogle(ctx *gin.Context) {
 	var req googleLoginRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -48,7 +43,7 @@ func (server *Server) refreshToken(ctx *gin.Context) {
 	}
 
 	server.setSessionCookies(ctx, authData.AccessToken, authData.RefreshToken)
-	ctx.JSON(http.StatusOK, gin.H{"access_token": authData.AccessToken})
+	ctx.JSON(http.StatusOK, gin.H{"accessToken": authData.AccessToken})
 }
 
 func (server *Server) logout(ctx *gin.Context) {
@@ -85,6 +80,21 @@ func (server *Server) setSessionCookies(ctx *gin.Context, accessToken, refreshTo
 		server.config.CookieSecure,
 		true,
 	)
+}
+
+func (server *Server) getMe(ctx *gin.Context) {
+	userID, ok := mustCurrentUserID(ctx)
+	if !ok {
+		return
+	}
+
+	user, err := server.usecase.GetMe(ctx, userID)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, newUserResponse(user))
 }
 
 func (server *Server) clearSessionCookies(ctx *gin.Context) {

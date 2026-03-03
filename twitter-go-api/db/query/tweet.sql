@@ -7,12 +7,12 @@ INSERT INTO tweets (
 RETURNING *;
 
 -- name: GetTweet :one
-SELECT ts.*,
-  EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = ts.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
-  EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = ts.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
-  EXISTS(SELECT 1 FROM follows f WHERE f.following_id = ts.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
-FROM tweets ts
-WHERE ts.id = $1 LIMIT 1;
+SELECT sqlc.embed(t),
+  EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
+  EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
+  EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
+FROM tweets t
+WHERE t.id = $1 LIMIT 1;
 
 -- name: DeleteTweetByOwner :one
 DELETE FROM tweets
@@ -61,8 +61,22 @@ SELECT * FROM tweets
 WHERE user_id = $1 AND retweet_id = $2
 LIMIT 1;
 
+-- name: ListMediaUrlsInThread :many
+WITH RECURSIVE tweet_tree AS (
+  SELECT t.id, t.media_url
+  FROM tweets t
+  WHERE t.id = $1
+  UNION ALL
+  SELECT t.id, t.media_url
+  FROM tweets t
+  INNER JOIN tweet_tree tt ON t.parent_id = tt.id
+)
+SELECT media_url
+FROM tweet_tree
+WHERE media_url IS NOT NULL AND media_url <> '';
+
 -- name: ListForYouFeed :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
@@ -74,8 +88,13 @@ ORDER BY
   t.created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: CountForYouFeed :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.parent_id IS NULL;
+
 -- name: ListFollowingFeed :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   true AS is_following
@@ -86,8 +105,15 @@ WHERE f.follower_id = $1
 ORDER BY t.created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: CountFollowingFeed :one
+SELECT COUNT(*)
+FROM tweets t
+JOIN follows f ON t.user_id = f.following_id
+WHERE f.follower_id = $1
+  AND t.parent_id IS NULL;
+
 -- name: ListUserTweets :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
@@ -97,8 +123,14 @@ WHERE t.user_id = $1
 ORDER BY t.created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: CountUserTweets :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.user_id = $1
+  AND t.parent_id IS NULL;
+
 -- name: ListTweetReplies :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
@@ -107,8 +139,13 @@ WHERE t.parent_id = $1
 ORDER BY t.created_at ASC
 LIMIT $2 OFFSET $3;
 
+-- name: CountTweetReplies :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.parent_id = $1;
+
 -- name: SearchTweetsFullText :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
@@ -117,8 +154,13 @@ WHERE t.search_vector @@ to_tsquery('english', $1)
 ORDER BY ts_rank(t.search_vector, to_tsquery('english', $1)) DESC, t.created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: CountSearchTweetsFullText :one
+SELECT COUNT(*)
+FROM tweets t
+WHERE t.search_vector @@ to_tsquery('english', $1);
+
 -- name: SearchTweetsByHashtag :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following
@@ -129,8 +171,15 @@ WHERE LOWER(h.text) = LOWER($1)
 ORDER BY t.created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: CountSearchTweetsByHashtag :one
+SELECT COUNT(*)
+FROM tweets t
+JOIN tweet_hashtags th ON th.tweet_id = t.id
+JOIN hashtags h ON h.id = th.hashtag_id
+WHERE LOWER(h.text) = LOWER($1);
+
 -- name: GetTweetsByIDs :many
-SELECT t.*,
+SELECT sqlc.embed(t),
   EXISTS(SELECT 1 FROM tweet_likes tl WHERE tl.tweet_id = t.id AND tl.user_id = sqlc.narg('viewer_id')) AS is_liked,
   EXISTS(SELECT 1 FROM tweets tr WHERE tr.retweet_id = t.id AND tr.user_id = sqlc.narg('viewer_id')) AS is_retweeted,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = t.user_id AND f.follower_id = sqlc.narg('viewer_id')) AS is_following

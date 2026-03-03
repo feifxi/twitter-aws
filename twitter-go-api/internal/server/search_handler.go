@@ -31,11 +31,16 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
+	total, err := server.usecase.CountSearchUsers(ctx, req.Query)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
 	response := make([]userResponse, 0, len(users))
 	for _, user := range users {
 		response = append(response, newUserResponse(user))
 	}
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }
 
 func (server *Server) searchTweets(ctx *gin.Context) {
@@ -57,11 +62,16 @@ func (server *Server) searchTweets(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
+	total, err := server.usecase.CountSearchTweets(ctx, req.Query)
+	if err != nil {
+		writeError(ctx, err)
+		return
+	}
 	response := make([]tweetResponse, 0, len(tweets))
 	for _, tweet := range tweets {
 		response = append(response, newTweetResponse(tweet))
 	}
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, buildPageResponse(response, page, size, total))
 }
 
 func (server *Server) searchHashtags(ctx *gin.Context) {
@@ -80,5 +90,9 @@ func (server *Server) searchHashtags(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, hashtags)
+	response := make([]hashtagResponse, 0, len(hashtags))
+	for _, h := range hashtags {
+		response = append(response, newHashtagResponse(h))
+	}
+	ctx.JSON(http.StatusOK, response)
 }

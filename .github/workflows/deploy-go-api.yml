@@ -1,4 +1,4 @@
-name: Deploy Backend (Go API)
+name: Deploy Go API
 
 # When this action will be executed
 on:

@@ -14,12 +14,12 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/db"
 	"github.com/chanombude/twitter-go-api/internal/logger"
 	"github.com/chanombude/twitter-go-api/internal/server"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -34,30 +34,41 @@ func main() {
 	if err != nil {
 		log.Fatal("cannot connect to db:", err)
 	}
-	// Database connection pool best practices
 	conn.SetMaxOpenConns(25)
 	conn.SetMaxIdleConns(25)
 	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	runDBMigration("file://db/migration", config.DBSource)
 
-	redisOpt, err := redis.ParseURL(config.RedisAddress)
-	if err != nil {
-		log.Fatal("cannot parse redis url:", err)
+	var redisClient *redis.Client
+	if config.RedisAddress != "" {
+		redisOpt, err := redis.ParseURL(config.RedisAddress)
+		if err != nil {
+			log.Printf("warning: invalid REDIS_ADDRESS, starting without redis: %v", err)
+		} else {
+			if config.RedisPassword != "" {
+				redisOpt.Password = config.RedisPassword
+			}
+			client := redis.NewClient(redisOpt)
+			pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			pingErr := client.Ping(pingCtx).Err()
+			cancel()
+			if pingErr != nil {
+				log.Printf("warning: redis unavailable, starting without redis: %v", pingErr)
+				_ = client.Close()
+			} else {
+				redisClient = client
+				defer redisClient.Close()
+			}
+		}
 	}
-	if config.RedisPassword != "" {
-		redisOpt.Password = config.RedisPassword
-	}
-	redisClient := redis.NewClient(redisOpt)
-	defer redisClient.Close()
 
-	store := db.New(conn)
+	store := db.NewStore(conn)
 	server, err := server.NewServer(config, store, redisClient)
 	if err != nil {
 		log.Fatal("cannot create server:", err)
 	}
 
-	// Run the server in a goroutine
 	srv := server.HTTPServer(config.HTTPServerAddress)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -65,8 +76,6 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 5 seconds.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

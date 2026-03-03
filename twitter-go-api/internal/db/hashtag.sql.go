@@ -10,6 +10,32 @@ import (
 	"database/sql"
 )
 
+const decrementHashtagUsageBy = `-- name: DecrementHashtagUsageBy :exec
+UPDATE hashtags
+SET usage_count = GREATEST(0, usage_count - $2)
+WHERE id = $1
+`
+
+type DecrementHashtagUsageByParams struct {
+	ID         int64 `json:"id"`
+	UsageCount int32 `json:"usage_count"`
+}
+
+func (q *Queries) DecrementHashtagUsageBy(ctx context.Context, arg DecrementHashtagUsageByParams) error {
+	_, err := q.db.ExecContext(ctx, decrementHashtagUsageBy, arg.ID, arg.UsageCount)
+	return err
+}
+
+const deleteUnusedHashtag = `-- name: DeleteUnusedHashtag :exec
+DELETE FROM hashtags
+WHERE id = $1 AND usage_count <= 0
+`
+
+func (q *Queries) DeleteUnusedHashtag(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteUnusedHashtag, id)
+	return err
+}
+
 const getTopHashtagsAllTime = `-- name: GetTopHashtagsAllTime :many
 SELECT id, text, usage_count, last_used_at, created_at FROM hashtags
 ORDER BY usage_count DESC, last_used_at DESC
@@ -99,6 +125,46 @@ type LinkTweetHashtagParams struct {
 func (q *Queries) LinkTweetHashtag(ctx context.Context, arg LinkTweetHashtagParams) error {
 	_, err := q.db.ExecContext(ctx, linkTweetHashtag, arg.TweetID, arg.HashtagID)
 	return err
+}
+
+const listHashtagUsageToDecrementForDeleteRoot = `-- name: ListHashtagUsageToDecrementForDeleteRoot :many
+WITH RECURSIVE tweet_tree AS (
+  SELECT t.id FROM tweets t WHERE t.id = $1
+  UNION ALL
+  SELECT t.id FROM tweets t INNER JOIN tweet_tree tt ON t.parent_id = tt.id OR t.retweet_id = tt.id
+)
+SELECT th.hashtag_id, COUNT(th.hashtag_id)::integer AS decrement_by
+FROM tweet_hashtags th
+JOIN tweet_tree tt ON th.tweet_id = tt.id
+GROUP BY th.hashtag_id
+`
+
+type ListHashtagUsageToDecrementForDeleteRootRow struct {
+	HashtagID   int64 `json:"hashtag_id"`
+	DecrementBy int32 `json:"decrement_by"`
+}
+
+func (q *Queries) ListHashtagUsageToDecrementForDeleteRoot(ctx context.Context, id int64) ([]ListHashtagUsageToDecrementForDeleteRootRow, error) {
+	rows, err := q.db.QueryContext(ctx, listHashtagUsageToDecrementForDeleteRoot, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHashtagUsageToDecrementForDeleteRootRow{}
+	for rows.Next() {
+		var i ListHashtagUsageToDecrementForDeleteRootRow
+		if err := rows.Scan(&i.HashtagID, &i.DecrementBy); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const searchHashtagsByPrefix = `-- name: SearchHashtagsByPrefix :many

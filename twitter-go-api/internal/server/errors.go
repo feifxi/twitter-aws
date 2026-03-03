@@ -36,6 +36,10 @@ func msgForTag(fe validator.FieldError) string {
 		return fmt.Sprintf("must be at most %s units", fe.Param())
 	case "oneof":
 		return fmt.Sprintf("must be one of [%s]", fe.Param())
+	case "numeric":
+		return "must be a valid number"
+	case "required_without":
+		return fmt.Sprintf("this field is required if %s is not provided", fe.Param())
 	}
 	return "invalid value"
 }
@@ -126,4 +130,14 @@ func defaultMessage(in, fallback string) string {
 		return fallback
 	}
 	return in
+}
+
+func writeValidationError(ctx *gin.Context, field, message string) {
+	ctx.JSON(http.StatusBadRequest, apiErrorResponse{
+		Code:    "VALIDATION_ERROR",
+		Message: "invalid request payload",
+		Details: []fieldError{
+			{Field: field, Message: message},
+		},
+	})
 }

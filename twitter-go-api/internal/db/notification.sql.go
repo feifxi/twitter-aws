@@ -10,6 +10,18 @@ import (
 	"database/sql"
 )
 
+const countNotifications = `-- name: CountNotifications :one
+SELECT COUNT(*) FROM notifications
+WHERE recipient_id = $1
+`
+
+func (q *Queries) CountNotifications(ctx context.Context, recipientID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countNotifications, recipientID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNotification = `-- name: CreateNotification :one
 INSERT INTO notifications (
   recipient_id, actor_id, tweet_id, type
