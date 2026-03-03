@@ -52,6 +52,7 @@ CREATE INDEX idx_tweets_parent ON tweets(parent_id);
 CREATE INDEX idx_tweets_retweet ON tweets(retweet_id);
 CREATE INDEX idx_tweets_created_at ON tweets(created_at DESC);
 CREATE INDEX idx_tweets_search ON tweets USING GIN(search_vector);
+CREATE INDEX idx_tweets_toplevel_created ON tweets(created_at DESC) WHERE parent_id IS NULL;
 
 CREATE TABLE follows (
     follower_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -70,6 +71,8 @@ CREATE TABLE tweet_likes (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, tweet_id)
 );
+
+CREATE INDEX idx_tweet_likes_tweet ON tweet_likes(tweet_id);
 
 CREATE TABLE hashtags (
     id BIGSERIAL PRIMARY KEY,
@@ -99,5 +102,5 @@ CREATE TABLE notifications (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_notifications_recipient ON notifications(recipient_id);
+CREATE INDEX idx_notifications_recipient ON notifications(recipient_id, created_at DESC);
 CREATE INDEX idx_notifications_unread ON notifications(recipient_id) WHERE is_read = FALSE;

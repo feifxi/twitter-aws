@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -96,8 +95,7 @@ func main() {
 }
 
 func runDBMigration(migrationURL string, dbSource string) {
-	migrateURL := strings.Replace(dbSource, "postgresql://", "pgx5://", 1)
-	migration, err := migrate.New(migrationURL, migrateURL)
+	migration, err := migrate.New(migrationURL, dbSource)
 	if err != nil {
 		log.Fatal("cannot create new migrate instance:", err)
 	}

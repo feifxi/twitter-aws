@@ -71,7 +71,7 @@ import type { PageResponse, TweetResponse } from '@/types';
         <div className="flex items-center gap-4">
             <div 
               onClick={() => router.back()} 
-              className="p-2 rounded-full hover:bg-card transition-colors -ml-2"
+              className="cursor-pointer p-2 rounded-full hover:bg-card transition-colors -ml-2"
             >
               <ArrowLeft className="w-5 h-5 text-foreground" />
             </div>
