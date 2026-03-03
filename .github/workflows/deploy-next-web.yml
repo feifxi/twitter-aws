@@ -5,7 +5,7 @@ on:
     branches: 
       [ main ]
     paths:
-    - 'twitter-frontend/**'
+    - 'twitter-next-web/**'
     - '.github/workflows/deploy-frontend.yml'
 
   workflow_dispatch:      
@@ -31,7 +31,7 @@ jobs:
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:
-          appSourcePath: ${{ github.workspace }}/twitter-frontend
+          appSourcePath: ${{ github.workspace }}/twitter-next-web
           dockerfilePath: dockerfile
           registryUrl: crchntwtdevsea001.azurecr.io
           registryUsername: ${{ secrets.CACHNTWTWEBDEV_REGISTRY_USERNAME }}
