@@ -147,14 +147,17 @@ func newNotificationResponse(item usecase.NotificationItem) notificationResponse
 	}
 
 	return notificationResponse{
-		ID:                   item.ID,
-		Actor:                newUserResponse(item.Actor),
-		TweetID:              tweetID,
-		TweetContent:         item.TweetContent,
-		TweetMediaUrl:        item.TweetMediaUrl,
-		OriginalTweetID:      item.OriginalTweetID,
-		OriginalTweetContent: item.OriginalTweetContent,
-		CreatedAt:            item.CreatedAt,
+		ID:                    item.ID,
+		Actor:                 newUserResponse(item.Actor),
+		TweetID:               tweetID,
+		TweetContent:          item.TweetContent,
+		TweetMediaUrl:         item.TweetMediaUrl,
+		OriginalTweetID:       item.OriginalTweetID,
+		OriginalTweetContent:  item.OriginalTweetContent,
+		OriginalTweetMediaUrl: item.OriginalTweetMediaUrl,
+		Type:                  item.Type,
+		IsRead:                item.IsRead,
+		CreatedAt:             item.CreatedAt,
 	}
 }
 
