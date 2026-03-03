@@ -13,6 +13,13 @@ type authResponse struct {
 	User        userResponse `json:"user"`
 }
 
+func newAuthResponse(accessToken string, user usecase.UserItem) authResponse {
+	return authResponse{
+		AccessToken: accessToken,
+		User:        newUserResponse(user),
+	}
+}
+
 type userResponse struct {
 	ID             int64   `json:"id"`
 	Username       string  `json:"username"`

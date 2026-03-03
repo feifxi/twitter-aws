@@ -1,28 +1,28 @@
 # Twitter Clone (Azure Deployment)
 
-A full-stack, pixel-perfect Twitter/X clone built with **Next.js 15** and a dual-backend architecture supporting both **Java (Spring Boot)** and **Go (Golang)**. It is designed for high-performance cloud-native deployment on **Azure Container Apps**.
+A full-stack, pixel-perfect Twitter/X clone built with **Next.js** and a Go-first backend architecture. The **Go API (`twitter-go-api`) is the primary production API**, while the Java API remains in the repo as a legacy/alternative implementation. It is designed for high-performance cloud-native deployment on **Azure Container Apps**.
 
 ## 🚀 Tech Stack
 
 ### Frontend
--   **Framework**: Next.js 15 (App Router)
+-   **Framework**: Next.js (App Router)
 -   **Language**: TypeScript
 -   **Styling**: Tailwind CSS, Shadcn/UI
 -   **State Management**: Zustand, TanStack Query
 -   **Authentication**: Custom JWT Auth + Google OAuth
 -   **Build**: Docker (Multi-stage)
 
-### Backends (Dual-Architecture)
-This project natively supports two interchangeable backends. You can run the frontend against either one!
+### Backends
+This repo contains two backend implementations. The **Go API is the main API** used for active development and deployment.
 
-**Option 1: Java (Spring Boot)**
--   **Framework**: Spring Boot 3
+**Legacy Option: Java (Spring Boot)**
+-   **Framework**: Spring Boot
 -   **Language**: Java 21
 -   **Database**: PostgreSQL (Spring Data JPA)
 
-**Option 2: Go (High Performance API)**
+**Primary Option: Go (High Performance API)**
 -   **Framework**: Gin Web Framework
--   **Language**: Go 1.22+
+-   **Language**: Go 1.24+
 -   **Database**: PostgreSQL (with sqlc)
 -   **Architecture**: Optimized Memory Batching (DataLoader pattern), Redis Caching
 -   **Logging**: Structured Telemetry (Zerolog)
@@ -55,7 +55,7 @@ This project natively supports two interchangeable backends. You can run the fro
 
 ### Prerequisites
 -   Node.js 20+
--   Java 21 (JDK)
+-   Go 1.24+
 -   Docker & Docker Compose
 
 ### 1. Database & Cache Setup
@@ -64,26 +64,25 @@ Run PostgreSQL and Redis locally using Docker Compose:
 docker-compose up -d
 ```
 
-### 2. Backend Setup (Choose One)
-
-**To run the Java (Spring Boot) backend `(Port 8080)`:**
-Navigate to `twitter-backend`:
-1.  Configure `src/main/resources/application.yml` (or use env vars) to point to your local DB.
-2.  Run the application:
-    ```bash
-    ./mvnw spring-boot:run
-    ```
+### 2. Backend Setup (Primary: Go API)
 
 **To run the Go backend `(Port 8080)`:**
 Navigate to `twitter-go-api`:
 1.  Configure `app.env` to point to your local DB and Redis.
-2.  Run the application:
+2.  Run migrations:
+    ```bash
+    make migrateup
+    ```
+3.  Run the application:
     ```bash
     make run
     ```
 
+**Legacy Java backend (optional):**
+Navigate to `twitter-java-api` and run with Maven if needed.
+
 ### 3. Frontend Setup
-Navigate to `twitter-frontend`:
+Navigate to `twitter-next-web`:
 1.  Install dependencies: `npm install`
 2.  Create `.env.local` based on `.example.env`.
 3.  Run the development server:
@@ -98,8 +97,9 @@ This project uses **Azure-generated CI/CD workflows** to build and deploy to Azu
 
 ### 1. Workflows
 The workflows are located in `.github/workflows/`:
--   `deploy-backend.yml`: Builds Java/Spring Boot image and deploys to the API Container App.
--   `deploy-frontend.yml`: Builds Next.js image and deploys to the Web Container App.
+-   `deploy-go-api.yml`: Builds Go API image and deploys to the API Container App.
+-   `deploy-next-web.yml`: Builds Next.js image and deploys to the Web Container App.
+-   `deploy-java-api.yml`: Java API deploy workflow (manual/legacy).
 
 These workflows utilize **OIDC Authentication** (`azure/login@v2`) and the `azure/container-apps-deploy-action@v2`.
 
@@ -116,10 +116,11 @@ In addition to the auto-generated Azure secrets, the following custom secrets mu
 
 ### 3. Environment Variables (Azure Portal)
 Ensure the **Backend Container App** has these environment variables configured in the Azure Portal:
--   `DB_URL`, `DB_USER`, `DB_PASSWORD` (Database Connection)
+-   `DATABASE_URL` (Database connection string)
 -   `FRONTEND_URL` (For CORS)
--   `AZURE_STORAGE_ACCOUNT_NAME`, `AZURE_STORAGE_ACCOUNT_ACCESS_KEY` (Blob Storage)
--   `GOOGLE_OAUTH_CLIENT_ID`
+-   `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME` (Blob Storage)
+-   `GOOGLE_CLIENT_ID`
+-   `TOKEN_SYMMETRIC_KEY`, `TOKEN_DURATION_MINUTES`, `REFRESH_TOKEN_DURATION_DAYS`
 
 ## 📄 License
 MIT

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
@@ -40,7 +41,9 @@ func NewAzureStorageService(config config.Config) (StorageService, error) {
 	// Ensure the container exists (creates it if it doesn't)
 	// We ignore the error here because the most common error is that it already exists.
 	// If it fails for another reason (e.g. auth), the subsequent uploads will still catch the error.
-	_, _ = client.CreateContainer(context.Background(), config.AzureStorageContainer, nil)
+	createCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = client.CreateContainer(createCtx, config.AzureStorageContainer, nil)
 
 	return &AzureStorageService{
 		client:        client,

@@ -96,6 +96,9 @@ Base URL: `/api/v1`
   "tweetId": 10,
   "tweetContent": "tweet text",
   "tweetMediaUrl": "https://...",
+  "originalTweetId": 9,
+  "originalTweetContent": "parent tweet",
+  "originalTweetMediaUrl": "https://...",
   "type": "LIKE|REPLY|RETWEET|FOLLOW",
   "isRead": false,
   "createdAt": "2026-03-02T00:00:00Z"
@@ -123,10 +126,15 @@ Response 200:
 - Requires `refresh_token` cookie.
 Response 200:
 ```json
-{ "accessToken": "jwt" }
+{
+  "accessToken": "jwt",
+  "user": { "...UserResponse" }
+}
 ```
 
 ### POST `/auth/logout`
+- Optional auth: accepts `Authorization: Bearer <token>` or `access_token` cookie.
+- Also revokes by `refresh_token` cookie when no auth context is present.
 Response 200:
 ```json
 { "success": true }
@@ -141,14 +149,10 @@ Response 200: `UserResponse`
 Response 200: `UserResponse`
 
 ### PUT `/users/profile` (private)
-Supports:
-1. `application/json`
-```json
-{ "bio": "...", "displayName": "..." }
-```
-2. `multipart/form-data`
-- `data`: JSON string of `{ bio?, displayName? }`
-- `avatar`: image file
+`multipart/form-data`
+- `displayName` (optional, max 30)
+- `bio` (optional, max 160)
+- `avatar` (optional, max size enforced by `MAX_AVATAR_BYTES`)
 
 Response 200: `UserResponse`
 
@@ -176,11 +180,9 @@ Response 200: `PageResponse<UserResponse>`
 
 ### POST `/tweets` (private)
 `multipart/form-data`:
-- `data` (required): JSON string
-```json
-{ "content": "text", "parentId": 123 }
-```
-- `media` (optional): image/video file
+- `content` (optional, max 280, required when media is not provided)
+- `parentId` (optional, integer, min 1)
+- `media` (optional, image/video file, max size enforced by `MAX_MEDIA_BYTES`)
 
 Response 201: `TweetResponse`
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/usecase"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 )
@@ -65,7 +68,12 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 }
 
 func (server *Server) setupRouter() {
+	configureValidationFieldNames()
+
 	router := gin.New()
+	if server.config.MaxMultipartMemoryBytes > 0 {
+		router.MaxMultipartMemory = server.config.MaxMultipartMemoryBytes
+	}
 	router.Use(logger.GinMiddleware())
 	router.Use(gin.Recovery())
 
@@ -101,7 +109,7 @@ func (server *Server) setupRouter() {
 	strictAuthLimiter := middleware.RateLimiter(2, 5)
 	router.POST("/api/v1/auth/google", strictAuthLimiter, server.loginGoogle)
 	router.POST("/api/v1/auth/refresh", strictAuthLimiter, server.refreshToken)
-	router.POST("/api/v1/auth/logout", strictAuthLimiter, server.logout)
+	router.POST("/api/v1/auth/logout", strictAuthLimiter, middleware.OptionalAuthMiddleware(server.tokenMaker), server.logout)
 
 	api := router.Group("/api/v1")
 
@@ -142,11 +150,45 @@ func (server *Server) setupRouter() {
 	server.router = router
 }
 
+func configureValidationFieldNames() {
+	v, ok := binding.Validator.Engine().(*validator.Validate)
+	if !ok {
+		return
+	}
+
+	v.RegisterTagNameFunc(func(field reflect.StructField) string {
+		for _, tag := range []string{"json", "form", "uri"} {
+			name := parseValidationTagName(field.Tag.Get(tag))
+			if name != "" {
+				return name
+			}
+		}
+		return field.Name
+	})
+}
+
+func parseValidationTagName(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	if len(parts) == 0 {
+		return ""
+	}
+	name := strings.TrimSpace(parts[0])
+	if name == "" || name == "-" {
+		return ""
+	}
+	return name
+}
+
 func (server *Server) HTTPServer(address string) *http.Server {
 	return &http.Server{
-		Addr:         address,
-		Handler:      server.router,
-		ReadTimeout:  10 * time.Second,
+		Addr:              address,
+		Handler:           server.router,
+		ReadTimeout:       10 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		// Keep write timeout disabled to support long-lived SSE streams.
 		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
 	}
@@ -158,7 +200,10 @@ type redisNotificationPayload struct {
 }
 
 func (server *Server) publishNotification(notification db.Notification) {
-	hydrated, err := server.usecase.HydrateNotification(context.Background(), notification)
+	hydrateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	hydrated, err := server.usecase.HydrateNotification(hydrateCtx, notification)
 	if err != nil {
 		log.Error().Err(err).Int64("notification_id", notification.ID).Int64("recipient_id", notification.RecipientID).Msg("Failed to hydrate notification for SSE; event not published")
 		return
@@ -179,7 +224,10 @@ func (server *Server) broadcastToRedis(recipientID int64, notification notificat
 		return
 	}
 
-	if err := server.redis.Publish(context.Background(), "notifications", data).Err(); err != nil {
+	pubCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := server.redis.Publish(pubCtx, "notifications", data).Err(); err != nil {
 		log.Error().Err(err).Msg("Failed to publish notification to Redis")
 		sendNotificationToUser(recipientID, notification)
 	}

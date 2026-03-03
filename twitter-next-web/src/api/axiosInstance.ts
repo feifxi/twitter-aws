@@ -65,7 +65,7 @@ axiosInstance.interceptors.response.use(
 export function getFieldErrors(error: unknown): FieldErrors {
   const err = error as AxiosError<ErrorResponse>;
   const data = err.response?.data;
-  const list = data?.errors;
+  const list = data?.details;
   if (!Array.isArray(list)) return {};
   return list.reduce<FieldErrors>((acc, { field, message }) => {
     acc[field] = message;

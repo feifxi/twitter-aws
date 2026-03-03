@@ -1,6 +1,6 @@
 # Twitter Clone Frontend
 
-A modern, responsive Twitter/X clone built with Next.js 15, React 19, Tailwind CSS, and Shadcn/UI.
+A modern, responsive Twitter/X clone built with Next.js, React 19, Tailwind CSS, and Shadcn/UI.
 
 ## Features
 
@@ -17,7 +17,7 @@ A modern, responsive Twitter/X clone built with Next.js 15, React 19, Tailwind C
 
 ## Tech Stack
 
-- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
+- **Framework**: [Next.js](https://nextjs.org/) (App Router)
 - **Language**: TypeScript
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
 - **Components**: [Shadcn/UI](https://ui.shadcn.com/)
@@ -38,7 +38,7 @@ A modern, responsive Twitter/X clone built with Next.js 15, React 19, Tailwind C
 1.  Clone the repository:
     ```bash
     git clone https://github.com/yourusername/twitter-clone-azure.git
-    cd twitter-clone-azure/twitter-frontend
+    cd twitter-clone-azure/twitter-next-web
     ```
 
 2.  Install dependencies:
@@ -47,7 +47,7 @@ A modern, responsive Twitter/X clone built with Next.js 15, React 19, Tailwind C
     ```
 
 3.  Set up environment variables:
-    Create a `.env.local` file in the root of `twitter-frontend` and add:
+    Create a `.env.local` file in the root of `twitter-next-web` and add:
     ```env
     NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
     ```

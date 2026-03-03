@@ -6,7 +6,7 @@ It was designed to replace the original Java/Spring Boot backend to provide sign
 
 ## 🚀 Tech Stack
 
-- **Language:** Go 1.22+
+- **Language:** Go 1.24+
 - **Framework:** Gin Web Framework
 - **Database:** PostgreSQL
 - **Query Builder:** sqlc (Type-safe SQL code generation)
@@ -29,7 +29,7 @@ It was designed to replace the original Java/Spring Boot backend to provide sign
 
 ### Prerequisites
 
-- Go 1.22 or higher
+- Go 1.24 or higher
 - PostgreSQL running locally (can be started via Docker Compose in the project root)
 - [sqlc](https://sqlc.dev/) (for database model generation)
 - [golang-migrate](https://github.com/golang-migrate/migrate) (for database migrations)
@@ -48,14 +48,20 @@ make migrateup
 
 Create a `app.env` file in the root of `twitter-go-api` based on required environment variables:
 ```env
-DB_SOURCE=postgres://root:rootpass@localhost:5432/twitter_db?sslmode=disable
-SERVER_ADDRESS=0.0.0.0:8080
-TOKEN_SYMMETRIC_KEY=12345678901234567890123456789012
-ACCESS_TOKEN_DURATION=15m
-REFRESH_TOKEN_DURATION=24h
-AZURE_STORAGE_ACCOUNT_NAME=your_account_name
-AZURE_STORAGE_ACCOUNT_KEY=your_access_key
-AZURE_CONTAINER_NAME=twitter-media
+DATABASE_URL=postgresql://root:rootpass@localhost:5432/twitter_db?sslmode=disable
+HTTP_SERVER_ADDRESS=0.0.0.0:8080
+DB_MAX_CONNS=25
+DB_MIN_CONNS=0
+DB_MAX_CONN_LIFETIME_MINUTES=5
+MAX_MULTIPART_MEMORY_BYTES=33554432
+MAX_MEDIA_BYTES=104857600
+MAX_AVATAR_BYTES=5242880
+TOKEN_SYMMETRIC_KEY=replace-with-a-strong-32-plus-char-secret
+TOKEN_DURATION_MINUTES=15
+REFRESH_TOKEN_DURATION_DAYS=30
+GOOGLE_CLIENT_ID=your-google-oauth-client-id.apps.googleusercontent.com
+AZURE_STORAGE_CONTAINER_NAME=tweet-media
+AZURE_STORAGE_CONNECTION_STRING=your-azure-storage-connection-string
 REDIS_ADDRESS=redis://localhost:6379
 REDIS_PASSWORD=
 ```

@@ -3,7 +3,6 @@ package server
 import (
 	"mime/multipart"
 	"net/http"
-	"strconv"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/usecase"
@@ -12,7 +11,7 @@ import (
 
 type createTweetRequest struct {
 	Content  *string               `form:"content" binding:"required_without=Media,omitempty,max=280"`
-	ParentID *string               `form:"parentId" binding:"omitempty,numeric"`
+	ParentID *int64                `form:"parentId" binding:"omitempty,min=1"`
 	Media    *multipart.FileHeader `form:"media"`
 }
 
@@ -28,19 +27,14 @@ func (server *Server) createTweet(ctx *gin.Context) {
 		return
 	}
 
-	var parentID *int64
-	if req.ParentID != nil {
-		id, err := strconv.ParseInt(*req.ParentID, 10, 64)
-		if err != nil || id <= 0 {
-			writeValidationError(ctx, "ParentID", "must be a positive number")
-			return
-		}
-		parentID = &id
-	}
-
-	input := usecase.CreateTweetInput{UserID: userID, Content: req.Content, ParentID: parentID}
+	input := usecase.CreateTweetInput{UserID: userID, Content: req.Content, ParentID: req.ParentID}
 
 	if req.Media != nil {
+		if server.config.MaxMediaBytes > 0 && req.Media.Size > server.config.MaxMediaBytes {
+			writeValidationError(ctx, "media", "file size exceeds limit")
+			return
+		}
+
 		file, err := req.Media.Open()
 		if err != nil {
 			writeError(ctx, apperr.BadRequest("failed to open media file"))

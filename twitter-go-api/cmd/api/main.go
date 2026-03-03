@@ -33,9 +33,15 @@ func main() {
 	if err != nil {
 		log.Fatal("cannot parse db config:", err)
 	}
-	poolConfig.MaxConns = 25
-	poolConfig.MinConns = 25
-	poolConfig.MaxConnLifetime = 5 * time.Minute
+	if config.DBMaxConns > 0 {
+		poolConfig.MaxConns = config.DBMaxConns
+	}
+	if config.DBMinConns >= 0 {
+		poolConfig.MinConns = config.DBMinConns
+	}
+	if config.DBMaxConnLifetimeMinutes > 0 {
+		poolConfig.MaxConnLifetime = time.Duration(config.DBMaxConnLifetimeMinutes) * time.Minute
+	}
 
 	conn, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {

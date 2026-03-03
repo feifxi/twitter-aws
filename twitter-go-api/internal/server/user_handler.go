@@ -34,6 +34,11 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 
 	// Check if avatar is provided
 	if req.Avatar != nil {
+		if server.config.MaxAvatarBytes > 0 && req.Avatar.Size > server.config.MaxAvatarBytes {
+			writeValidationError(ctx, "avatar", "file size exceeds limit")
+			return
+		}
+
 		file, err := req.Avatar.Open()
 		if err != nil {
 			writeError(ctx, apperr.BadRequest("failed to open avatar file"))

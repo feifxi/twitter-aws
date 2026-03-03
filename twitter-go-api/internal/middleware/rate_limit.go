@@ -44,10 +44,7 @@ func RateLimiter(r rate.Limit, b int) gin.HandlerFunc {
 		mu.Unlock()
 
 		if !limiter.Allow() {
-			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"code":    "TOO_MANY_REQUESTS",
-				"message": "rate limit exceeded",
-			})
+			abortWithError(ctx, http.StatusTooManyRequests, "TOO_MANY_REQUESTS", "rate limit exceeded")
 			return
 		}
 

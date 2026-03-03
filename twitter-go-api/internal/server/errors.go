@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgconn"
 	zlog "github.com/rs/zerolog/log"
 )
 
@@ -65,22 +67,38 @@ func writeError(ctx *gin.Context, err error) {
 		})
 		return
 	}
+	var numErr *strconv.NumError
+	if errors.As(err, &numErr) {
+		response := apiErrorResponse{
+			Code:    "VALIDATION_ERROR",
+			Message: "invalid request payload",
+		}
+		if field, msg := inferNumericFieldError(ctx); field != "" {
+			response.Details = []fieldError{{Field: field, Message: msg}}
+		}
+		ctx.JSON(http.StatusBadRequest, response)
+		return
+	}
 
 	status := http.StatusInternalServerError
 	code := "INTERNAL_ERROR"
 	message := "internal server error"
 
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) {
-		switch pqErr.Code.Name() {
-		case "unique_violation":
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505": // unique_violation
 			status = http.StatusConflict
 			code = "CONFLICT"
 			message = "resource already exists"
-		case "foreign_key_violation":
+		case "23503": // foreign_key_violation
 			status = http.StatusBadRequest
 			code = "BAD_REQUEST"
 			message = "referenced resource does not exist"
+		case "23514": // check_violation
+			status = http.StatusBadRequest
+			code = "BAD_REQUEST"
+			message = "invalid request"
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
 		status = http.StatusNotFound
@@ -140,4 +158,36 @@ func writeValidationError(ctx *gin.Context, field, message string) {
 			{Field: field, Message: message},
 		},
 	})
+}
+
+func inferNumericFieldError(ctx *gin.Context) (string, string) {
+	if ctx == nil || ctx.Request == nil {
+		return "", ""
+	}
+
+	candidates := []string{"parentId", "id", "page", "size", "limit"}
+	for _, field := range candidates {
+		value := strings.TrimSpace(numericFieldRawValue(ctx, field))
+		if value == "" {
+			continue
+		}
+		if _, err := strconv.ParseInt(value, 10, 64); err != nil {
+			return field, "must be a valid number"
+		}
+	}
+
+	return "", ""
+}
+
+func numericFieldRawValue(ctx *gin.Context, field string) string {
+	if v := strings.TrimSpace(ctx.Param(field)); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(ctx.Query(field)); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(ctx.PostForm(field)); v != "" {
+		return v
+	}
+	return ""
 }

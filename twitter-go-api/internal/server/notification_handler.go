@@ -26,12 +26,13 @@ var (
 func sendNotificationToUser(userID int64, notification notificationResponse) {
 	mu.RLock()
 	userClients, ok := clients[userID]
+	snapshot := append([]*sseClient(nil), userClients...)
 	mu.RUnlock()
 	if !ok {
 		return
 	}
 
-	for _, client := range userClients {
+	for _, client := range snapshot {
 		select {
 		case client.channel <- notification:
 		default:
@@ -73,7 +74,6 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
 	ctx.Writer.Header().Set("Cache-Control", "no-cache")
 	ctx.Writer.Header().Set("Connection", "keep-alive")
-	ctx.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {
@@ -106,8 +106,6 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 		if len(clients[userID]) == 0 {
 			delete(clients, userID)
 		}
-
-		close(client.channel)
 		log.Info().Int64("user_id", userID).Int("connections", len(clients[userID])).Msg("SSE client disconnected")
 	}()
 

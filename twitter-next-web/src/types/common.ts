@@ -5,12 +5,9 @@ export interface ValidationError {
 
 /** Backend error payload. Use fieldErrors for form binding. */
 export interface ErrorResponse {
-    timestamp: string;
-    status: number;
-    error: string;
+    code: string;
     message: string;
-    path: string;
-    errors?: ValidationError[];
+    details?: ValidationError[];
 }
 
 /** Map of field name -> message for easy form input binding. */

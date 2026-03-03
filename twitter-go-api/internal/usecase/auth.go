@@ -21,7 +21,7 @@ type AuthResult struct {
 }
 
 func (u *Usecase) LoginWithGoogle(ctx context.Context, idToken string) (AuthResult, error) {
-	payload, err := idtoken.Validate(context.Background(), idToken, u.config.GoogleClientID)
+	payload, err := idtoken.Validate(ctx, idToken, u.config.GoogleClientID)
 	if err != nil {
 		return AuthResult{}, apperr.Unauthorized("invalid google token")
 	}
