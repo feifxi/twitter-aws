@@ -1,12 +1,12 @@
 name: Deploy Java API
 
 on:
-#  push:
-#    branches: 
-#      [ main ]
-#    paths:
-#    - 'twitter-backend/**'
-#    - '.github/workflows/deploy-backend.yml'
+  # push:
+  #   branches: 
+  #     [ main ]
+  #   paths:
+  #     - 'twitter-java-api/**'
+  #     - '.github/workflows/deploy-java-api.yml'
 
   # Allow manual trigger 
   workflow_dispatch:      
@@ -32,7 +32,7 @@ jobs:
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:
-          appSourcePath: ${{ github.workspace }}/twitter-backend
+          appSourcePath: ${{ github.workspace }}/twitter-java-api
           dockerfilePath: dockerfile
           registryUrl: crchntwtdevsea001.azurecr.io
           registryUsername: ${{ secrets.CACHNTWTAPIDEV_REGISTRY_USERNAME }}

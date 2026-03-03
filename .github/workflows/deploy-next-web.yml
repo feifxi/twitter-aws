@@ -1,4 +1,4 @@
-name: Deploy Web
+name: Deploy Next.js Web
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       [ main ]
     paths:
     - 'twitter-next-web/**'
-    - '.github/workflows/deploy-frontend.yml'
+    - '.github/workflows/deploy-next-web.yml'
 
   workflow_dispatch:      
 
