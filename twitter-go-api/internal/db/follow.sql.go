@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/lib/pq"
 )
 
 const followUser = `-- name: FollowUser :one
@@ -37,7 +35,7 @@ type FollowUserParams struct {
 }
 
 func (q *Queries) FollowUser(ctx context.Context, arg FollowUserParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, followUser, arg.FollowerID, arg.FollowingID)
+	row := q.db.QueryRow(ctx, followUser, arg.FollowerID, arg.FollowingID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -54,7 +52,7 @@ type GetFollowedUserIDsParams struct {
 }
 
 func (q *Queries) GetFollowedUserIDs(ctx context.Context, arg GetFollowedUserIDsParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, getFollowedUserIDs, arg.FollowerID, pq.Array(arg.Column2))
+	rows, err := q.db.Query(ctx, getFollowedUserIDs, arg.FollowerID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -66,9 +64,6 @@ func (q *Queries) GetFollowedUserIDs(ctx context.Context, arg GetFollowedUserIDs
 			return nil, err
 		}
 		items = append(items, following_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -101,7 +96,7 @@ type UnfollowUserParams struct {
 }
 
 func (q *Queries) UnfollowUser(ctx context.Context, arg UnfollowUserParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, unfollowUser, arg.FollowerID, arg.FollowingID)
+	row := q.db.QueryRow(ctx, unfollowUser, arg.FollowerID, arg.FollowingID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

@@ -11,6 +11,7 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/api/idtoken"
 )
 
@@ -44,8 +45,8 @@ func (u *Usecase) LoginWithGoogle(ctx context.Context, idToken string) (AuthResu
 		user, err = u.store.CreateUser(ctx, db.CreateUserParams{
 			Username:    username,
 			Email:       email,
-			DisplayName: nullStringFromPtr(&name),
-			AvatarUrl:   nullStringFromPtr(&picture),
+			DisplayName: &name,
+			AvatarUrl:   &picture,
 			Role:        RoleUser,
 			Provider:    "GOOGLE",
 		})
@@ -68,7 +69,7 @@ func (u *Usecase) RefreshSession(ctx context.Context, refreshToken string) (Auth
 		return AuthResult{}, apperr.Unauthorized("refresh token not found or revoked")
 	}
 
-	if time.Now().After(session.ExpiryDate) {
+	if time.Now().After(session.ExpiryDate.Time) {
 		_ = u.store.DeleteRefreshToken(ctx, refreshToken)
 		return AuthResult{}, apperr.Unauthorized("refresh token expired")
 	}
@@ -78,7 +79,7 @@ func (u *Usecase) RefreshSession(ctx context.Context, refreshToken string) (Auth
 		return AuthResult{}, err
 	}
 
-	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: session.UserID, ViewerID: sql.NullInt64{Valid: false}})
+	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: session.UserID, ViewerID: nil})
 	if err != nil {
 		return AuthResult{}, err
 	}
@@ -104,7 +105,7 @@ func (u *Usecase) Logout(ctx context.Context, userID *int64, refreshToken *strin
 }
 
 func (u *Usecase) GetMe(ctx context.Context, userID int64) (UserItem, error) {
-	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: userID, ViewerID: sql.NullInt64{Valid: false}})
+	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: userID, ViewerID: nil})
 	if err != nil {
 		return UserItem{}, err
 	}
@@ -130,7 +131,7 @@ func (u *Usecase) issueSession(ctx context.Context, userID int64) (accessToken s
 	_, err = u.store.CreateRefreshToken(ctx, db.CreateRefreshTokenParams{
 		UserID:     userID,
 		Token:      refreshToken,
-		ExpiryDate: expiresAt,
+		ExpiryDate: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
 		return "", "", err

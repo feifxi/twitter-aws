@@ -7,7 +7,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
 
 const decrementHashtagUsageBy = `-- name: DecrementHashtagUsageBy :exec
@@ -22,7 +21,7 @@ type DecrementHashtagUsageByParams struct {
 }
 
 func (q *Queries) DecrementHashtagUsageBy(ctx context.Context, arg DecrementHashtagUsageByParams) error {
-	_, err := q.db.ExecContext(ctx, decrementHashtagUsageBy, arg.ID, arg.UsageCount)
+	_, err := q.db.Exec(ctx, decrementHashtagUsageBy, arg.ID, arg.UsageCount)
 	return err
 }
 
@@ -32,7 +31,7 @@ WHERE id = $1 AND usage_count <= 0
 `
 
 func (q *Queries) DeleteUnusedHashtag(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteUnusedHashtag, id)
+	_, err := q.db.Exec(ctx, deleteUnusedHashtag, id)
 	return err
 }
 
@@ -43,7 +42,7 @@ LIMIT $1
 `
 
 func (q *Queries) GetTopHashtagsAllTime(ctx context.Context, limit int32) ([]Hashtag, error) {
-	rows, err := q.db.QueryContext(ctx, getTopHashtagsAllTime, limit)
+	rows, err := q.db.Query(ctx, getTopHashtagsAllTime, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +60,6 @@ func (q *Queries) GetTopHashtagsAllTime(ctx context.Context, limit int32) ([]Has
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -83,7 +79,7 @@ LIMIT $1
 `
 
 func (q *Queries) GetTrendingHashtagsLast24h(ctx context.Context, limit int32) ([]Hashtag, error) {
-	rows, err := q.db.QueryContext(ctx, getTrendingHashtagsLast24h, limit)
+	rows, err := q.db.Query(ctx, getTrendingHashtagsLast24h, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -101,9 +97,6 @@ func (q *Queries) GetTrendingHashtagsLast24h(ctx context.Context, limit int32) (
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -123,7 +116,7 @@ type LinkTweetHashtagParams struct {
 }
 
 func (q *Queries) LinkTweetHashtag(ctx context.Context, arg LinkTweetHashtagParams) error {
-	_, err := q.db.ExecContext(ctx, linkTweetHashtag, arg.TweetID, arg.HashtagID)
+	_, err := q.db.Exec(ctx, linkTweetHashtag, arg.TweetID, arg.HashtagID)
 	return err
 }
 
@@ -145,7 +138,7 @@ type ListHashtagUsageToDecrementForDeleteRootRow struct {
 }
 
 func (q *Queries) ListHashtagUsageToDecrementForDeleteRoot(ctx context.Context, id int64) ([]ListHashtagUsageToDecrementForDeleteRootRow, error) {
-	rows, err := q.db.QueryContext(ctx, listHashtagUsageToDecrementForDeleteRoot, id)
+	rows, err := q.db.Query(ctx, listHashtagUsageToDecrementForDeleteRoot, id)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +150,6 @@ func (q *Queries) ListHashtagUsageToDecrementForDeleteRoot(ctx context.Context, 
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -175,12 +165,12 @@ LIMIT $2
 `
 
 type SearchHashtagsByPrefixParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Limit   int32          `json:"limit"`
+	Column1 *string `json:"column_1"`
+	Limit   int32   `json:"limit"`
 }
 
 func (q *Queries) SearchHashtagsByPrefix(ctx context.Context, arg SearchHashtagsByPrefixParams) ([]Hashtag, error) {
-	rows, err := q.db.QueryContext(ctx, searchHashtagsByPrefix, arg.Column1, arg.Limit)
+	rows, err := q.db.Query(ctx, searchHashtagsByPrefix, arg.Column1, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -199,9 +189,6 @@ func (q *Queries) SearchHashtagsByPrefix(ctx context.Context, arg SearchHashtags
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -218,7 +205,7 @@ RETURNING id, text, usage_count, last_used_at, created_at
 `
 
 func (q *Queries) UpsertHashtag(ctx context.Context, text string) (Hashtag, error) {
-	row := q.db.QueryRowContext(ctx, upsertHashtag, text)
+	row := q.db.QueryRow(ctx, upsertHashtag, text)
 	var i Hashtag
 	err := row.Scan(
 		&i.ID,

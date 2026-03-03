@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
@@ -11,7 +10,7 @@ func (u *Usecase) GetGlobalFeed(ctx context.Context, page, size int32, viewerID 
 	rows, err := u.store.ListForYouFeed(ctx, db.ListForYouFeedParams{
 		Limit:    size,
 		Offset:   page * size,
-		ViewerID: nullViewerID(viewerID),
+		ViewerID: viewerID,
 	})
 	if err != nil {
 		return nil, err
@@ -29,7 +28,7 @@ func (u *Usecase) GetFollowingFeed(ctx context.Context, userID int64, page, size
 		FollowerID: userID,
 		Limit:      size,
 		Offset:     page * size,
-		ViewerID:   sql.NullInt64{Int64: userID, Valid: true},
+		ViewerID:   &userID,
 	})
 	if err != nil {
 		return nil, err

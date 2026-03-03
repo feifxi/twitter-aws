@@ -23,7 +23,7 @@ type IsTweetLikedParams struct {
 }
 
 func (q *Queries) IsTweetLiked(ctx context.Context, arg IsTweetLikedParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isTweetLiked, arg.UserID, arg.TweetID)
+	row := q.db.QueryRow(ctx, isTweetLiked, arg.UserID, arg.TweetID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -50,7 +50,7 @@ type LikeTweetParams struct {
 }
 
 func (q *Queries) LikeTweet(ctx context.Context, arg LikeTweetParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, likeTweet, arg.UserID, arg.TweetID)
+	row := q.db.QueryRow(ctx, likeTweet, arg.UserID, arg.TweetID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -76,7 +76,7 @@ type UnlikeTweetParams struct {
 }
 
 func (q *Queries) UnlikeTweet(ctx context.Context, arg UnlikeTweetParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, unlikeTweet, arg.UserID, arg.TweetID)
+	row := q.db.QueryRow(ctx, unlikeTweet, arg.UserID, arg.TweetID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err

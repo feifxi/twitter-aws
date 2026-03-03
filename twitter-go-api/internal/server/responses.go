@@ -27,14 +27,14 @@ type userResponse struct {
 
 func newUserResponse(user usecase.UserItem) userResponse {
 	var displayName, bio, avatarUrl *string
-	if user.DisplayName.Valid {
-		displayName = &user.DisplayName.String
+	if user.DisplayName != nil {
+		displayName = user.DisplayName
 	}
-	if user.Bio.Valid {
-		bio = &user.Bio.String
+	if user.Bio != nil {
+		bio = user.Bio
 	}
-	if user.AvatarUrl.Valid {
-		avatarUrl = &user.AvatarUrl.String
+	if user.AvatarUrl != nil {
+		avatarUrl = user.AvatarUrl
 	}
 
 	return userResponse{
@@ -69,19 +69,19 @@ type tweetResponse struct {
 
 func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
 	var content, mediaType, mediaURL *string
-	if tweet.Content.Valid {
-		content = &tweet.Content.String
+	if tweet.Content != nil {
+		content = tweet.Content
 	}
-	if tweet.MediaType.Valid {
-		mediaType = &tweet.MediaType.String
+	if tweet.MediaType != nil {
+		mediaType = tweet.MediaType
 	}
-	if tweet.MediaUrl.Valid {
-		mediaURL = &tweet.MediaUrl.String
+	if tweet.MediaUrl != nil {
+		mediaURL = tweet.MediaUrl
 	}
 
 	var parentID *int64
-	if tweet.ParentID.Valid {
-		parentID = &tweet.ParentID.Int64
+	if tweet.ParentID != nil {
+		parentID = tweet.ParentID
 	}
 
 	var original *tweetResponse
@@ -104,7 +104,7 @@ func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
 		RetweetedTweet:  original,
 		ReplyToTweetID:  parentID,
 		ReplyToUsername: tweet.ParentUsername,
-		CreatedAt:       tweet.CreatedAt,
+		CreatedAt:       tweet.CreatedAt.Time,
 	}
 }
 
@@ -121,8 +121,8 @@ func newHashtagResponse(tag db.Hashtag) hashtagResponse {
 		ID:         tag.ID,
 		Text:       tag.Text,
 		UsageCount: tag.UsageCount,
-		LastUsedAt: tag.LastUsedAt,
-		CreatedAt:  tag.CreatedAt,
+		LastUsedAt: tag.LastUsedAt.Time,
+		CreatedAt:  tag.CreatedAt.Time,
 	}
 }
 
@@ -142,8 +142,8 @@ type notificationResponse struct {
 
 func newNotificationResponse(item usecase.NotificationItem) notificationResponse {
 	var tweetID *int64
-	if item.TweetID.Valid {
-		tweetID = &item.TweetID.Int64
+	if item.TweetID != nil {
+		tweetID = item.TweetID
 	}
 
 	return notificationResponse{
@@ -157,7 +157,7 @@ func newNotificationResponse(item usecase.NotificationItem) notificationResponse
 		OriginalTweetMediaUrl: item.OriginalTweetMediaUrl,
 		Type:                  item.Type,
 		IsRead:                item.IsRead,
-		CreatedAt:             item.CreatedAt,
+		CreatedAt:             item.CreatedAt.Time,
 	}
 }
 

@@ -7,7 +7,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
 
 const countNotifications = `-- name: CountNotifications :one
@@ -16,7 +15,7 @@ WHERE recipient_id = $1
 `
 
 func (q *Queries) CountNotifications(ctx context.Context, recipientID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countNotifications, recipientID)
+	row := q.db.QueryRow(ctx, countNotifications, recipientID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -32,14 +31,14 @@ RETURNING id, recipient_id, actor_id, tweet_id, type, is_read, created_at
 `
 
 type CreateNotificationParams struct {
-	RecipientID int64         `json:"recipient_id"`
-	ActorID     int64         `json:"actor_id"`
-	TweetID     sql.NullInt64 `json:"tweet_id"`
-	Type        string        `json:"type"`
+	RecipientID int64  `json:"recipient_id"`
+	ActorID     int64  `json:"actor_id"`
+	TweetID     *int64 `json:"tweet_id"`
+	Type        string `json:"type"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
-	row := q.db.QueryRowContext(ctx, createNotification,
+	row := q.db.QueryRow(ctx, createNotification,
 		arg.RecipientID,
 		arg.ActorID,
 		arg.TweetID,
@@ -64,7 +63,7 @@ WHERE recipient_id = $1 AND is_read = FALSE
 `
 
 func (q *Queries) GetUnreadNotificationCount(ctx context.Context, recipientID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getUnreadNotificationCount, recipientID)
+	row := q.db.QueryRow(ctx, getUnreadNotificationCount, recipientID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -84,7 +83,7 @@ type ListNotificationsParams struct {
 }
 
 func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error) {
-	rows, err := q.db.QueryContext(ctx, listNotifications, arg.RecipientID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listNotifications, arg.RecipientID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -105,9 +104,6 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -121,6 +117,6 @@ WHERE recipient_id = $1 AND is_read = FALSE
 `
 
 func (q *Queries) MarkAllNotificationsRead(ctx context.Context, recipientID int64) error {
-	_, err := q.db.ExecContext(ctx, markAllNotificationsRead, recipientID)
+	_, err := q.db.Exec(ctx, markAllNotificationsRead, recipientID)
 	return err
 }

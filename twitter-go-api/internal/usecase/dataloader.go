@@ -22,11 +22,11 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 	for _, in := range inputs {
 		t := in.Tweet
 		userIDsMap[t.UserID] = true
-		if t.ParentID.Valid {
-			tweetIDsMap[t.ParentID.Int64] = true
+		if t.ParentID != nil {
+			tweetIDsMap[*t.ParentID] = true
 		}
-		if t.RetweetID.Valid {
-			tweetIDsMap[t.RetweetID.Int64] = true
+		if t.RetweetID != nil {
+			tweetIDsMap[*t.RetweetID] = true
 		}
 	}
 
@@ -126,14 +126,14 @@ func (u *Usecase) populateTweetItems(ctx context.Context, inputs []TweetHydratio
 			IsFollowing: in.IsFollowing,
 		}
 
-		if t.ParentID.Valid {
-			if parentTweet, ok := refTweetsMap[t.ParentID.Int64]; ok {
+		if t.ParentID != nil {
+			if parentTweet, ok := refTweetsMap[*t.ParentID]; ok {
 				item.ParentUsername = &parentTweet.Author.Username
 			}
 		}
 
-		if t.RetweetID.Valid {
-			if originalTweet, ok := refTweetsMap[t.RetweetID.Int64]; ok {
+		if t.RetweetID != nil {
+			if originalTweet, ok := refTweetsMap[*t.RetweetID]; ok {
 				item.OriginalTweet = &originalTweet
 			}
 		}

@@ -7,10 +7,8 @@ package db
 
 import (
 	"context"
-	"database/sql"
-	"time"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countFollowingFeed = `-- name: CountFollowingFeed :one
@@ -22,7 +20,7 @@ WHERE f.follower_id = $1
 `
 
 func (q *Queries) CountFollowingFeed(ctx context.Context, followerID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFollowingFeed, followerID)
+	row := q.db.QueryRow(ctx, countFollowingFeed, followerID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -35,7 +33,7 @@ WHERE t.parent_id IS NULL
 `
 
 func (q *Queries) CountForYouFeed(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countForYouFeed)
+	row := q.db.QueryRow(ctx, countForYouFeed)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -50,7 +48,7 @@ WHERE LOWER(h.text) = LOWER($1)
 `
 
 func (q *Queries) CountSearchTweetsByHashtag(ctx context.Context, lower string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSearchTweetsByHashtag, lower)
+	row := q.db.QueryRow(ctx, countSearchTweetsByHashtag, lower)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -63,7 +61,7 @@ WHERE t.search_vector @@ to_tsquery('english', $1)
 `
 
 func (q *Queries) CountSearchTweetsFullText(ctx context.Context, toTsquery string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSearchTweetsFullText, toTsquery)
+	row := q.db.QueryRow(ctx, countSearchTweetsFullText, toTsquery)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -75,8 +73,8 @@ FROM tweets t
 WHERE t.parent_id = $1
 `
 
-func (q *Queries) CountTweetReplies(ctx context.Context, parentID sql.NullInt64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTweetReplies, parentID)
+func (q *Queries) CountTweetReplies(ctx context.Context, parentID *int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countTweetReplies, parentID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -90,7 +88,7 @@ WHERE t.user_id = $1
 `
 
 func (q *Queries) CountUserTweets(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUserTweets, userID)
+	row := q.db.QueryRow(ctx, countUserTweets, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -112,28 +110,28 @@ SELECT id, user_id, content, media_type, media_url, parent_id, retweet_id, reply
 `
 
 type CreateRetweetParams struct {
-	UserID    int64         `json:"user_id"`
-	RetweetID sql.NullInt64 `json:"retweet_id"`
+	UserID    int64  `json:"user_id"`
+	RetweetID *int64 `json:"retweet_id"`
 }
 
 type CreateRetweetRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
+	ID           int64              `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Content      *string            `json:"content"`
+	MediaType    *string            `json:"media_type"`
+	MediaUrl     *string            `json:"media_url"`
+	ParentID     *int64             `json:"parent_id"`
+	RetweetID    *int64             `json:"retweet_id"`
+	ReplyCount   int32              `json:"reply_count"`
+	RetweetCount int32              `json:"retweet_count"`
+	LikeCount    int32              `json:"like_count"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	SearchVector interface{}        `json:"search_vector"`
 }
 
 func (q *Queries) CreateRetweet(ctx context.Context, arg CreateRetweetParams) (CreateRetweetRow, error) {
-	row := q.db.QueryRowContext(ctx, createRetweet, arg.UserID, arg.RetweetID)
+	row := q.db.QueryRow(ctx, createRetweet, arg.UserID, arg.RetweetID)
 	var i CreateRetweetRow
 	err := row.Scan(
 		&i.ID,
@@ -163,16 +161,16 @@ RETURNING id, user_id, content, media_type, media_url, parent_id, retweet_id, re
 `
 
 type CreateTweetParams struct {
-	UserID    int64          `json:"user_id"`
-	Content   sql.NullString `json:"content"`
-	MediaType sql.NullString `json:"media_type"`
-	MediaUrl  sql.NullString `json:"media_url"`
-	ParentID  sql.NullInt64  `json:"parent_id"`
-	RetweetID sql.NullInt64  `json:"retweet_id"`
+	UserID    int64   `json:"user_id"`
+	Content   *string `json:"content"`
+	MediaType *string `json:"media_type"`
+	MediaUrl  *string `json:"media_url"`
+	ParentID  *int64  `json:"parent_id"`
+	RetweetID *int64  `json:"retweet_id"`
 }
 
 func (q *Queries) CreateTweet(ctx context.Context, arg CreateTweetParams) (Tweet, error) {
-	row := q.db.QueryRowContext(ctx, createTweet,
+	row := q.db.QueryRow(ctx, createTweet,
 		arg.UserID,
 		arg.Content,
 		arg.MediaType,
@@ -206,7 +204,7 @@ WHERE id = $1
 `
 
 func (q *Queries) DecrementParentReplyCount(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, decrementParentReplyCount, id)
+	_, err := q.db.Exec(ctx, decrementParentReplyCount, id)
 	return err
 }
 
@@ -225,28 +223,28 @@ SELECT id, user_id, content, media_type, media_url, parent_id, retweet_id, reply
 `
 
 type DeleteRetweetByUserParams struct {
-	UserID    int64         `json:"user_id"`
-	RetweetID sql.NullInt64 `json:"retweet_id"`
+	UserID    int64  `json:"user_id"`
+	RetweetID *int64 `json:"retweet_id"`
 }
 
 type DeleteRetweetByUserRow struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
+	ID           int64              `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Content      *string            `json:"content"`
+	MediaType    *string            `json:"media_type"`
+	MediaUrl     *string            `json:"media_url"`
+	ParentID     *int64             `json:"parent_id"`
+	RetweetID    *int64             `json:"retweet_id"`
+	ReplyCount   int32              `json:"reply_count"`
+	RetweetCount int32              `json:"retweet_count"`
+	LikeCount    int32              `json:"like_count"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	SearchVector interface{}        `json:"search_vector"`
 }
 
 func (q *Queries) DeleteRetweetByUser(ctx context.Context, arg DeleteRetweetByUserParams) (DeleteRetweetByUserRow, error) {
-	row := q.db.QueryRowContext(ctx, deleteRetweetByUser, arg.UserID, arg.RetweetID)
+	row := q.db.QueryRow(ctx, deleteRetweetByUser, arg.UserID, arg.RetweetID)
 	var i DeleteRetweetByUserRow
 	err := row.Scan(
 		&i.ID,
@@ -278,7 +276,7 @@ type DeleteTweetByOwnerParams struct {
 }
 
 func (q *Queries) DeleteTweetByOwner(ctx context.Context, arg DeleteTweetByOwnerParams) (Tweet, error) {
-	row := q.db.QueryRowContext(ctx, deleteTweetByOwner, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, deleteTweetByOwner, arg.ID, arg.UserID)
 	var i Tweet
 	err := row.Scan(
 		&i.ID,
@@ -308,8 +306,8 @@ WHERE t.id = $1 LIMIT 1
 `
 
 type GetTweetParams struct {
-	ID       int64         `json:"id"`
-	ViewerID sql.NullInt64 `json:"viewer_id"`
+	ID       int64  `json:"id"`
+	ViewerID *int64 `json:"viewer_id"`
 }
 
 type GetTweetRow struct {
@@ -320,7 +318,7 @@ type GetTweetRow struct {
 }
 
 func (q *Queries) GetTweet(ctx context.Context, arg GetTweetParams) (GetTweetRow, error) {
-	row := q.db.QueryRowContext(ctx, getTweet, arg.ID, arg.ViewerID)
+	row := q.db.QueryRow(ctx, getTweet, arg.ID, arg.ViewerID)
 	var i GetTweetRow
 	err := row.Scan(
 		&i.Tweet.ID,
@@ -353,8 +351,8 @@ WHERE t.id = ANY($2::bigint[])
 `
 
 type GetTweetsByIDsParams struct {
-	ViewerID sql.NullInt64 `json:"viewer_id"`
-	TweetIds []int64       `json:"tweet_ids"`
+	ViewerID *int64  `json:"viewer_id"`
+	TweetIds []int64 `json:"tweet_ids"`
 }
 
 type GetTweetsByIDsRow struct {
@@ -365,7 +363,7 @@ type GetTweetsByIDsRow struct {
 }
 
 func (q *Queries) GetTweetsByIDs(ctx context.Context, arg GetTweetsByIDsParams) ([]GetTweetsByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTweetsByIDs, arg.ViewerID, pq.Array(arg.TweetIds))
+	rows, err := q.db.Query(ctx, getTweetsByIDs, arg.ViewerID, arg.TweetIds)
 	if err != nil {
 		return nil, err
 	}
@@ -395,9 +393,6 @@ func (q *Queries) GetTweetsByIDs(ctx context.Context, arg GetTweetsByIDsParams) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -411,12 +406,12 @@ LIMIT 1
 `
 
 type GetUserRetweetParams struct {
-	UserID    int64         `json:"user_id"`
-	RetweetID sql.NullInt64 `json:"retweet_id"`
+	UserID    int64  `json:"user_id"`
+	RetweetID *int64 `json:"retweet_id"`
 }
 
 func (q *Queries) GetUserRetweet(ctx context.Context, arg GetUserRetweetParams) (Tweet, error) {
-	row := q.db.QueryRowContext(ctx, getUserRetweet, arg.UserID, arg.RetweetID)
+	row := q.db.QueryRow(ctx, getUserRetweet, arg.UserID, arg.RetweetID)
 	var i Tweet
 	err := row.Scan(
 		&i.ID,
@@ -443,7 +438,7 @@ WHERE id = $1
 `
 
 func (q *Queries) IncrementParentReplyCount(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, incrementParentReplyCount, id)
+	_, err := q.db.Exec(ctx, incrementParentReplyCount, id)
 	return err
 }
 
@@ -461,10 +456,10 @@ LIMIT $2 OFFSET $3
 `
 
 type ListFollowingFeedParams struct {
-	FollowerID int64         `json:"follower_id"`
-	Limit      int32         `json:"limit"`
-	Offset     int32         `json:"offset"`
-	ViewerID   sql.NullInt64 `json:"viewer_id"`
+	FollowerID int64  `json:"follower_id"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+	ViewerID   *int64 `json:"viewer_id"`
 }
 
 type ListFollowingFeedRow struct {
@@ -475,7 +470,7 @@ type ListFollowingFeedRow struct {
 }
 
 func (q *Queries) ListFollowingFeed(ctx context.Context, arg ListFollowingFeedParams) ([]ListFollowingFeedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFollowingFeed,
+	rows, err := q.db.Query(ctx, listFollowingFeed,
 		arg.FollowerID,
 		arg.Limit,
 		arg.Offset,
@@ -510,9 +505,6 @@ func (q *Queries) ListFollowingFeed(ctx context.Context, arg ListFollowingFeedPa
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -534,9 +526,9 @@ LIMIT $1 OFFSET $2
 `
 
 type ListForYouFeedParams struct {
-	Limit    int32         `json:"limit"`
-	Offset   int32         `json:"offset"`
-	ViewerID sql.NullInt64 `json:"viewer_id"`
+	Limit    int32  `json:"limit"`
+	Offset   int32  `json:"offset"`
+	ViewerID *int64 `json:"viewer_id"`
 }
 
 type ListForYouFeedRow struct {
@@ -547,7 +539,7 @@ type ListForYouFeedRow struct {
 }
 
 func (q *Queries) ListForYouFeed(ctx context.Context, arg ListForYouFeedParams) ([]ListForYouFeedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listForYouFeed, arg.Limit, arg.Offset, arg.ViewerID)
+	rows, err := q.db.Query(ctx, listForYouFeed, arg.Limit, arg.Offset, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -577,9 +569,6 @@ func (q *Queries) ListForYouFeed(ctx context.Context, arg ListForYouFeedParams) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -601,22 +590,19 @@ FROM tweet_tree
 WHERE media_url IS NOT NULL AND media_url <> ''
 `
 
-func (q *Queries) ListMediaUrlsInThread(ctx context.Context, id int64) ([]sql.NullString, error) {
-	rows, err := q.db.QueryContext(ctx, listMediaUrlsInThread, id)
+func (q *Queries) ListMediaUrlsInThread(ctx context.Context, id int64) ([]*string, error) {
+	rows, err := q.db.Query(ctx, listMediaUrlsInThread, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []sql.NullString{}
+	items := []*string{}
 	for rows.Next() {
-		var media_url sql.NullString
+		var media_url *string
 		if err := rows.Scan(&media_url); err != nil {
 			return nil, err
 		}
 		items = append(items, media_url)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -636,10 +622,10 @@ LIMIT $2 OFFSET $3
 `
 
 type ListTweetRepliesParams struct {
-	ParentID sql.NullInt64 `json:"parent_id"`
-	Limit    int32         `json:"limit"`
-	Offset   int32         `json:"offset"`
-	ViewerID sql.NullInt64 `json:"viewer_id"`
+	ParentID *int64 `json:"parent_id"`
+	Limit    int32  `json:"limit"`
+	Offset   int32  `json:"offset"`
+	ViewerID *int64 `json:"viewer_id"`
 }
 
 type ListTweetRepliesRow struct {
@@ -650,7 +636,7 @@ type ListTweetRepliesRow struct {
 }
 
 func (q *Queries) ListTweetReplies(ctx context.Context, arg ListTweetRepliesParams) ([]ListTweetRepliesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTweetReplies,
+	rows, err := q.db.Query(ctx, listTweetReplies,
 		arg.ParentID,
 		arg.Limit,
 		arg.Offset,
@@ -685,9 +671,6 @@ func (q *Queries) ListTweetReplies(ctx context.Context, arg ListTweetRepliesPara
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -707,10 +690,10 @@ LIMIT $2 OFFSET $3
 `
 
 type ListUserTweetsParams struct {
-	UserID   int64         `json:"user_id"`
-	Limit    int32         `json:"limit"`
-	Offset   int32         `json:"offset"`
-	ViewerID sql.NullInt64 `json:"viewer_id"`
+	UserID   int64  `json:"user_id"`
+	Limit    int32  `json:"limit"`
+	Offset   int32  `json:"offset"`
+	ViewerID *int64 `json:"viewer_id"`
 }
 
 type ListUserTweetsRow struct {
@@ -721,7 +704,7 @@ type ListUserTweetsRow struct {
 }
 
 func (q *Queries) ListUserTweets(ctx context.Context, arg ListUserTweetsParams) ([]ListUserTweetsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUserTweets,
+	rows, err := q.db.Query(ctx, listUserTweets,
 		arg.UserID,
 		arg.Limit,
 		arg.Offset,
@@ -756,9 +739,6 @@ func (q *Queries) ListUserTweets(ctx context.Context, arg ListUserTweetsParams) 
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -779,10 +759,10 @@ LIMIT $2 OFFSET $3
 `
 
 type SearchTweetsByHashtagParams struct {
-	Lower    string        `json:"lower"`
-	Limit    int32         `json:"limit"`
-	Offset   int32         `json:"offset"`
-	ViewerID sql.NullInt64 `json:"viewer_id"`
+	Lower    string `json:"lower"`
+	Limit    int32  `json:"limit"`
+	Offset   int32  `json:"offset"`
+	ViewerID *int64 `json:"viewer_id"`
 }
 
 type SearchTweetsByHashtagRow struct {
@@ -793,7 +773,7 @@ type SearchTweetsByHashtagRow struct {
 }
 
 func (q *Queries) SearchTweetsByHashtag(ctx context.Context, arg SearchTweetsByHashtagParams) ([]SearchTweetsByHashtagRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchTweetsByHashtag,
+	rows, err := q.db.Query(ctx, searchTweetsByHashtag,
 		arg.Lower,
 		arg.Limit,
 		arg.Offset,
@@ -828,9 +808,6 @@ func (q *Queries) SearchTweetsByHashtag(ctx context.Context, arg SearchTweetsByH
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -849,10 +826,10 @@ LIMIT $2 OFFSET $3
 `
 
 type SearchTweetsFullTextParams struct {
-	ToTsquery string        `json:"to_tsquery"`
-	Limit     int32         `json:"limit"`
-	Offset    int32         `json:"offset"`
-	ViewerID  sql.NullInt64 `json:"viewer_id"`
+	ToTsquery string `json:"to_tsquery"`
+	Limit     int32  `json:"limit"`
+	Offset    int32  `json:"offset"`
+	ViewerID  *int64 `json:"viewer_id"`
 }
 
 type SearchTweetsFullTextRow struct {
@@ -863,7 +840,7 @@ type SearchTweetsFullTextRow struct {
 }
 
 func (q *Queries) SearchTweetsFullText(ctx context.Context, arg SearchTweetsFullTextParams) ([]SearchTweetsFullTextRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchTweetsFullText,
+	rows, err := q.db.Query(ctx, searchTweetsFullText,
 		arg.ToTsquery,
 		arg.Limit,
 		arg.Offset,
@@ -897,9 +874,6 @@ func (q *Queries) SearchTweetsFullText(ctx context.Context, arg SearchTweetsFull
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

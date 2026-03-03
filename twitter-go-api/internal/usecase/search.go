@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 	"strings"
 
 	"github.com/chanombude/twitter-go-api/internal/db"
@@ -15,10 +14,10 @@ func (u *Usecase) SearchUsers(ctx context.Context, query string, page, size int3
 	}
 
 	rows, err := u.store.SearchUsers(ctx, db.SearchUsersParams{
-		Column1:  sql.NullString{String: trimmed, Valid: true},
+		Column1:  &trimmed,
 		Limit:    size,
 		Offset:   page * size,
-		ViewerID: nullViewerID(viewerID),
+		ViewerID: viewerID,
 	})
 	if err != nil {
 		return nil, err
@@ -36,7 +35,7 @@ func (u *Usecase) CountSearchUsers(ctx context.Context, query string) (int64, er
 	if trimmed == "" {
 		return 0, nil
 	}
-	return u.store.CountSearchUsers(ctx, sql.NullString{String: trimmed, Valid: true})
+	return u.store.CountSearchUsers(ctx, &trimmed)
 }
 
 func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int32, viewerID *int64) ([]TweetItem, error) {
@@ -45,7 +44,6 @@ func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int
 		return []TweetItem{}, nil
 	}
 
-	vID := nullViewerID(viewerID)
 	if strings.HasPrefix(trimmed, "#") {
 		hashtag := strings.TrimSpace(strings.ToLower(strings.TrimLeft(trimmed, "#")))
 		if hashtag == "" {
@@ -56,7 +54,7 @@ func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int
 			Lower:    hashtag,
 			Limit:    size,
 			Offset:   page * size,
-			ViewerID: vID,
+			ViewerID: viewerID,
 		})
 		if err != nil {
 			return nil, err
@@ -74,7 +72,7 @@ func (u *Usecase) SearchTweets(ctx context.Context, query string, page, size int
 		ToTsquery: tsQuery,
 		Limit:     size,
 		Offset:    page * size,
-		ViewerID:  vID,
+		ViewerID:  viewerID,
 	})
 	if err != nil {
 		return nil, err
@@ -103,8 +101,9 @@ func (u *Usecase) SearchHashtags(ctx context.Context, query string, limit int32)
 		return []db.Hashtag{}, nil
 	}
 
+	prefix := strings.TrimPrefix(trimmed, "#")
 	return u.store.SearchHashtagsByPrefix(ctx, db.SearchHashtagsByPrefixParams{
-		Column1: sql.NullString{String: strings.TrimPrefix(trimmed, "#"), Valid: true},
+		Column1: &prefix,
 		Limit:   limit,
 	})
 }

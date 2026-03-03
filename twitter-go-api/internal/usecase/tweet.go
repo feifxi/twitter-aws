@@ -31,23 +31,17 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		trimmedContent = strings.TrimSpace(*input.Content)
 	}
 
-	parentID := sql.NullInt64{Valid: false}
-	if input.ParentID != nil {
-		if _, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: *input.ParentID}); err != nil {
-			return TweetItem{}, err
-		}
-		parentID = sql.NullInt64{Int64: *input.ParentID, Valid: true}
-	}
-
-	mediaType := sql.NullString{String: MediaTypeNone, Valid: true}
-	mediaURL := sql.NullString{Valid: false}
+	var mediaType *string
+	var mediaURL *string
 	if input.Media != nil {
 		contentType := strings.ToLower(input.Media.ContentType)
 		switch {
 		case strings.HasPrefix(contentType, "image/"):
-			mediaType = sql.NullString{String: MediaTypeImage, Valid: true}
+			img := MediaTypeImage
+			mediaType = &img
 		case strings.HasPrefix(contentType, "video/"):
-			mediaType = sql.NullString{String: MediaTypeVideo, Valid: true}
+			vid := MediaTypeVideo
+			mediaType = &vid
 		default:
 			return TweetItem{}, apperr.BadRequest("only images or videos are allowed")
 		}
@@ -56,16 +50,16 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		if err != nil {
 			return TweetItem{}, err
 		}
-		mediaURL = sql.NullString{String: uploadedURL, Valid: true}
+		mediaURL = &uploadedURL
 	}
 
-	if trimmedContent == "" && !mediaURL.Valid {
+	if trimmedContent == "" && mediaURL == nil {
 		return TweetItem{}, apperr.BadRequest("tweet must include text or media")
 	}
 
-	content := sql.NullString{Valid: false}
+	var content *string
 	if trimmedContent != "" {
-		content = sql.NullString{String: trimmedContent, Valid: true}
+		content = &trimmedContent
 	}
 
 	var createdTweet db.Tweet
@@ -77,27 +71,27 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 			Content:   content,
 			MediaType: mediaType,
 			MediaUrl:  mediaURL,
-			ParentID:  parentID,
-			RetweetID: sql.NullInt64{Valid: false},
+			ParentID:  input.ParentID,
+			RetweetID: nil,
 		})
 		if err != nil {
 			return err
 		}
 
-		if parentID.Valid {
-			if err := q.IncrementParentReplyCount(ctx, parentID.Int64); err != nil {
+		if input.ParentID != nil {
+			if err := q.IncrementParentReplyCount(ctx, *input.ParentID); err != nil {
 				return err
 			}
 
-			parentTweet, err := q.GetTweet(ctx, db.GetTweetParams{ID: parentID.Int64})
+			parentTweet, err := q.GetTweet(ctx, db.GetTweetParams{ID: *input.ParentID})
 			if err == nil {
 				tweetID := createdTweet.ID
 				pendingNotification, _ = u.createNotification(ctx, q, parentTweet.Tweet.UserID, input.UserID, &tweetID, NotifTypeReply)
 			}
 		}
 
-		if content.Valid {
-			tags := extractHashtags(content.String)
+		if content != nil {
+			tags := extractHashtags(*content)
 			for _, tag := range tags {
 				h, err := q.UpsertHashtag(ctx, tag)
 				if err != nil {
@@ -116,8 +110,8 @@ func (u *Usecase) CreateTweet(ctx context.Context, input CreateTweetInput) (Twee
 		}
 	})
 	if err != nil {
-		if mediaURL.Valid {
-			_ = u.storage.DeleteFile(ctx, mediaURL.String)
+		if mediaURL != nil {
+			_ = u.storage.DeleteFile(ctx, *mediaURL)
 		}
 		return TweetItem{}, err
 	}
@@ -147,10 +141,10 @@ func (u *Usecase) DeleteTweet(ctx context.Context, userID, tweetID int64) error 
 			return err
 		}
 
-		if tweet.Tweet.RetweetID.Valid {
+		if tweet.Tweet.RetweetID != nil {
 			_, err := q.DeleteRetweetByUser(ctx, db.DeleteRetweetByUserParams{
 				UserID:    userID,
-				RetweetID: sql.NullInt64{Int64: tweet.Tweet.RetweetID.Int64, Valid: true},
+				RetweetID: tweet.Tweet.RetweetID,
 			})
 			if err != nil {
 				return err
@@ -162,8 +156,8 @@ func (u *Usecase) DeleteTweet(ctx context.Context, userID, tweetID int64) error 
 			}
 		}
 
-		if tweet.Tweet.ParentID.Valid {
-			if err := q.DecrementParentReplyCount(ctx, tweet.Tweet.ParentID.Int64); err != nil {
+		if tweet.Tweet.ParentID != nil {
+			if err := q.DecrementParentReplyCount(ctx, *tweet.Tweet.ParentID); err != nil {
 				return err
 			}
 		}
@@ -184,14 +178,14 @@ func (u *Usecase) DeleteTweet(ctx context.Context, userID, tweetID int64) error 
 	}, func() {
 		seen := make(map[string]struct{}, len(mediaURLs))
 		for _, url := range mediaURLs {
-			if !url.Valid || url.String == "" {
+			if url == nil || *url == "" {
 				continue
 			}
-			if _, exists := seen[url.String]; exists {
+			if _, exists := seen[*url]; exists {
 				continue
 			}
-			seen[url.String] = struct{}{}
-			_ = u.storage.DeleteFile(ctx, url.String)
+			seen[*url] = struct{}{}
+			_ = u.storage.DeleteFile(ctx, *url)
 		}
 	})
 	if err != nil {
@@ -222,10 +216,10 @@ func (u *Usecase) ListReplies(ctx context.Context, tweetID int64, page, size int
 	}
 
 	rows, err := u.store.ListTweetReplies(ctx, db.ListTweetRepliesParams{
-		ParentID: sql.NullInt64{Int64: tweetID, Valid: true},
+		ParentID: &tweetID,
 		Limit:    size,
 		Offset:   page * size,
-		ViewerID: vID,
+		ViewerID: viewerID,
 	})
 	if err != nil {
 		return nil, err
@@ -257,7 +251,7 @@ func mapTweetReplyRows(rows []db.ListTweetRepliesRow) []TweetHydrationInput {
 }
 
 func (u *Usecase) CountReplies(ctx context.Context, tweetID int64) (int64, error) {
-	return u.store.CountTweetReplies(ctx, sql.NullInt64{Int64: tweetID, Valid: true})
+	return u.store.CountTweetReplies(ctx, &tweetID)
 }
 
 func (u *Usecase) LikeTweet(ctx context.Context, userID, tweetID int64) error {
@@ -306,8 +300,8 @@ func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem
 	}
 
 	originalTweet := targetTweet
-	if targetTweet.Tweet.RetweetID.Valid {
-		originalTweet, err = u.store.GetTweet(ctx, db.GetTweetParams{ID: targetTweet.Tweet.RetweetID.Int64})
+	if targetTweet.Tweet.RetweetID != nil {
+		originalTweet, err = u.store.GetTweet(ctx, db.GetTweetParams{ID: *targetTweet.Tweet.RetweetID})
 		if err != nil {
 			return TweetItem{}, err
 		}
@@ -319,14 +313,14 @@ func (u *Usecase) Retweet(ctx context.Context, userID, tweetID int64) (TweetItem
 		var err error
 		created, err = q.CreateRetweet(ctx, db.CreateRetweetParams{
 			UserID:    userID,
-			RetweetID: sql.NullInt64{Int64: originalTweet.Tweet.ID, Valid: true},
+			RetweetID: &originalTweet.Tweet.ID,
 		})
 		if err != nil {
 			// ON CONFLICT DO NOTHING returns no row for existing retweet.
 			if errors.Is(err, sql.ErrNoRows) {
 				existing, getErr := q.GetUserRetweet(ctx, db.GetUserRetweetParams{
 					UserID:    userID,
-					RetweetID: sql.NullInt64{Int64: originalTweet.Tweet.ID, Valid: true},
+					RetweetID: &originalTweet.Tweet.ID,
 				})
 				if getErr != nil {
 					return getErr
@@ -359,13 +353,13 @@ func (u *Usecase) UndoRetweet(ctx context.Context, userID, tweetID int64) error 
 	}
 
 	originalID := targetTweet.Tweet.ID
-	if targetTweet.Tweet.RetweetID.Valid {
-		originalID = targetTweet.Tweet.RetweetID.Int64
+	if targetTweet.Tweet.RetweetID != nil {
+		originalID = *targetTweet.Tweet.RetweetID
 	}
 
 	_, err = u.store.DeleteRetweetByUser(ctx, db.DeleteRetweetByUserParams{
 		UserID:    userID,
-		RetweetID: sql.NullInt64{Int64: originalID, Valid: true},
+		RetweetID: &originalID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil

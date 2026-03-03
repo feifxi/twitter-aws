@@ -5,56 +5,55 @@
 package db
 
 import (
-	"database/sql"
-	"time"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Follow struct {
-	FollowerID  int64     `json:"follower_id"`
-	FollowingID int64     `json:"following_id"`
-	CreatedAt   time.Time `json:"created_at"`
+	FollowerID  int64              `json:"follower_id"`
+	FollowingID int64              `json:"following_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type Hashtag struct {
-	ID         int64     `json:"id"`
-	Text       string    `json:"text"`
-	UsageCount int32     `json:"usage_count"`
-	LastUsedAt time.Time `json:"last_used_at"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         int64              `json:"id"`
+	Text       string             `json:"text"`
+	UsageCount int32              `json:"usage_count"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type Notification struct {
-	ID          int64         `json:"id"`
-	RecipientID int64         `json:"recipient_id"`
-	ActorID     int64         `json:"actor_id"`
-	TweetID     sql.NullInt64 `json:"tweet_id"`
-	Type        string        `json:"type"`
-	IsRead      bool          `json:"is_read"`
-	CreatedAt   time.Time     `json:"created_at"`
+	ID          int64              `json:"id"`
+	RecipientID int64              `json:"recipient_id"`
+	ActorID     int64              `json:"actor_id"`
+	TweetID     *int64             `json:"tweet_id"`
+	Type        string             `json:"type"`
+	IsRead      bool               `json:"is_read"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type RefreshToken struct {
-	ID         int64     `json:"id"`
-	UserID     int64     `json:"user_id"`
-	Token      string    `json:"token"`
-	ExpiryDate time.Time `json:"expiry_date"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         int64              `json:"id"`
+	UserID     int64              `json:"user_id"`
+	Token      string             `json:"token"`
+	ExpiryDate pgtype.Timestamptz `json:"expiry_date"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type Tweet struct {
-	ID           int64          `json:"id"`
-	UserID       int64          `json:"user_id"`
-	Content      sql.NullString `json:"content"`
-	MediaType    sql.NullString `json:"media_type"`
-	MediaUrl     sql.NullString `json:"media_url"`
-	ParentID     sql.NullInt64  `json:"parent_id"`
-	RetweetID    sql.NullInt64  `json:"retweet_id"`
-	ReplyCount   int32          `json:"reply_count"`
-	RetweetCount int32          `json:"retweet_count"`
-	LikeCount    int32          `json:"like_count"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	SearchVector interface{}    `json:"search_vector"`
+	ID           int64              `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Content      *string            `json:"content"`
+	MediaType    *string            `json:"media_type"`
+	MediaUrl     *string            `json:"media_url"`
+	ParentID     *int64             `json:"parent_id"`
+	RetweetID    *int64             `json:"retweet_id"`
+	ReplyCount   int32              `json:"reply_count"`
+	RetweetCount int32              `json:"retweet_count"`
+	LikeCount    int32              `json:"like_count"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	SearchVector interface{}        `json:"search_vector"`
 }
 
 type TweetHashtag struct {
@@ -63,22 +62,22 @@ type TweetHashtag struct {
 }
 
 type TweetLike struct {
-	UserID    int64     `json:"user_id"`
-	TweetID   int64     `json:"tweet_id"`
-	CreatedAt time.Time `json:"created_at"`
+	UserID    int64              `json:"user_id"`
+	TweetID   int64              `json:"tweet_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
-	ID             int64          `json:"id"`
-	Username       string         `json:"username"`
-	Email          string         `json:"email"`
-	DisplayName    sql.NullString `json:"display_name"`
-	Bio            sql.NullString `json:"bio"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	Role           string         `json:"role"`
-	Provider       string         `json:"provider"`
-	FollowersCount int32          `json:"followers_count"`
-	FollowingCount int32          `json:"following_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+	ID             int64              `json:"id"`
+	Username       string             `json:"username"`
+	Email          string             `json:"email"`
+	DisplayName    *string            `json:"display_name"`
+	Bio            *string            `json:"bio"`
+	AvatarUrl      *string            `json:"avatar_url"`
+	Role           string             `json:"role"`
+	Provider       string             `json:"provider"`
+	FollowersCount int32              `json:"followers_count"`
+	FollowingCount int32              `json:"following_count"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }

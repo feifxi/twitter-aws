@@ -10,11 +10,12 @@ import (
 )
 
 // nullViewerID builds the common sql.NullInt64 viewer pattern.
-func nullViewerID(viewerID *int64) sql.NullInt64 {
-	if viewerID != nil {
-		return sql.NullInt64{Int64: *viewerID, Valid: true}
+func nullViewerID(viewerID *int64) *int64 {
+	if viewerID == nil {
+		return nil
 	}
-	return sql.NullInt64{Valid: false}
+	v := *viewerID
+	return &v
 }
 
 func nullStringFromPtr(v *string) sql.NullString {
@@ -82,10 +83,10 @@ func (u *Usecase) createNotification(ctx context.Context, q *db.Queries, recipie
 		RecipientID: recipientID,
 		ActorID:     actorID,
 		Type:        typ,
-		TweetID:     sql.NullInt64{Valid: false},
+		TweetID:     nil,
 	}
 	if tweetID != nil {
-		arg.TweetID = sql.NullInt64{Int64: *tweetID, Valid: true}
+		arg.TweetID = tweetID
 	}
 
 	return q.CreateNotification(ctx, arg)

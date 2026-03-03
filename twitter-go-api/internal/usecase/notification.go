@@ -61,8 +61,8 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 	tweetIDsMap := make(map[int64]struct{}, len(notifications))
 	for _, n := range notifications {
 		actorIDsMap[n.ActorID] = struct{}{}
-		if n.TweetID.Valid {
-			tweetIDsMap[n.TweetID.Int64] = struct{}{}
+		if n.TweetID != nil {
+			tweetIDsMap[*n.TweetID] = struct{}{}
 		}
 	}
 
@@ -80,7 +80,7 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 	if len(actorIDs) > 0 {
 		rawActors, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
 			UserIds:  actorIDs,
-			ViewerID: sql.NullInt64{Valid: false},
+			ViewerID: nil,
 		})
 		if err != nil {
 			return nil, err
@@ -99,7 +99,7 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 	if len(tweetIDs) > 0 {
 		rawTweets, err := u.store.GetTweetsByIDs(ctx, db.GetTweetsByIDsParams{
 			TweetIds: tweetIDs,
-			ViewerID: sql.NullInt64{Valid: false},
+			ViewerID: nil,
 		})
 		if err != nil {
 			return nil, err
@@ -108,16 +108,16 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 		parentIDsTemp := make(map[int64]struct{})
 		for _, raw := range rawTweets {
 			var content *string
-			if raw.Tweet.Content.Valid {
-				content = &raw.Tweet.Content.String
+			if raw.Tweet.Content != nil {
+				content = raw.Tweet.Content
 			}
 			var media *string
-			if raw.Tweet.MediaUrl.Valid {
-				media = &raw.Tweet.MediaUrl.String
+			if raw.Tweet.MediaUrl != nil {
+				media = raw.Tweet.MediaUrl
 			}
 			var parentId *int64
-			if raw.Tweet.ParentID.Valid {
-				id := raw.Tweet.ParentID.Int64
+			if raw.Tweet.ParentID != nil {
+				id := *raw.Tweet.ParentID
 				parentId = &id
 				parentIDsTemp[id] = struct{}{}
 			}
@@ -134,17 +134,17 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 		if len(parentIDs) > 0 {
 			parentRaw, err := u.store.GetTweetsByIDs(ctx, db.GetTweetsByIDsParams{
 				TweetIds: parentIDs,
-				ViewerID: sql.NullInt64{Valid: false},
+				ViewerID: nil,
 			})
 			if err == nil {
 				for _, raw := range parentRaw {
 					var content *string
-					if raw.Tweet.Content.Valid {
-						content = &raw.Tweet.Content.String
+					if raw.Tweet.Content != nil {
+						content = raw.Tweet.Content
 					}
 					var media *string
-					if raw.Tweet.MediaUrl.Valid {
-						media = &raw.Tweet.MediaUrl.String
+					if raw.Tweet.MediaUrl != nil {
+						media = raw.Tweet.MediaUrl
 					}
 					tweets[raw.Tweet.ID] = tweetPreview{Content: content, Media: media}
 				}
@@ -160,8 +160,8 @@ func (u *Usecase) hydrateNotifications(ctx context.Context, notifications []db.N
 		if actor, ok := actors[n.ActorID]; ok {
 			item.Actor = actor
 		}
-		if n.TweetID.Valid {
-			if preview, ok := tweets[n.TweetID.Int64]; ok {
+		if n.TweetID != nil {
+			if preview, ok := tweets[*n.TweetID]; ok {
 				item.TweetContent = preview.Content
 				item.TweetMediaUrl = preview.Media
 				if n.Type == NotifTypeReply && preview.ParentID != nil {

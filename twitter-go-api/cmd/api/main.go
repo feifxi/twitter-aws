@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -17,9 +16,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -30,13 +29,18 @@ func main() {
 
 	logger.InitLogger(config.Environment)
 
-	conn, err := sql.Open("postgres", config.DBSource)
+	poolConfig, err := pgxpool.ParseConfig(config.DBSource)
+	if err != nil {
+		log.Fatal("cannot parse db config:", err)
+	}
+	poolConfig.MaxConns = 25
+	poolConfig.MinConns = 25
+	poolConfig.MaxConnLifetime = 5 * time.Minute
+
+	conn, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
 		log.Fatal("cannot connect to db:", err)
 	}
-	conn.SetMaxOpenConns(25)
-	conn.SetMaxIdleConns(25)
-	conn.SetConnMaxLifetime(5 * time.Minute)
 
 	runDBMigration("file://db/migration", config.DBSource)
 

@@ -6,7 +6,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
 
 type Querier interface {
@@ -17,10 +16,10 @@ type Querier interface {
 	CountNotifications(ctx context.Context, recipientID int64) (int64, error)
 	CountSearchTweetsByHashtag(ctx context.Context, lower string) (int64, error)
 	CountSearchTweetsFullText(ctx context.Context, toTsquery string) (int64, error)
-	CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error)
+	CountSearchUsers(ctx context.Context, dollar_1 *string) (int64, error)
 	CountSuggestedUsers(ctx context.Context, id int64) (int64, error)
 	CountTopUsers(ctx context.Context) (int64, error)
-	CountTweetReplies(ctx context.Context, parentID sql.NullInt64) (int64, error)
+	CountTweetReplies(ctx context.Context, parentID *int64) (int64, error)
 	CountUserTweets(ctx context.Context, userID int64) (int64, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
@@ -57,7 +56,7 @@ type Querier interface {
 	ListFollowingUsers(ctx context.Context, arg ListFollowingUsersParams) ([]ListFollowingUsersRow, error)
 	ListForYouFeed(ctx context.Context, arg ListForYouFeedParams) ([]ListForYouFeedRow, error)
 	ListHashtagUsageToDecrementForDeleteRoot(ctx context.Context, id int64) ([]ListHashtagUsageToDecrementForDeleteRootRow, error)
-	ListMediaUrlsInThread(ctx context.Context, id int64) ([]sql.NullString, error)
+	ListMediaUrlsInThread(ctx context.Context, id int64) ([]*string, error)
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
 	ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsersParams) ([]ListSuggestedUsersRow, error)
 	ListTopUsers(ctx context.Context, arg ListTopUsersParams) ([]User, error)

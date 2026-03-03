@@ -7,7 +7,8 @@ package db
 
 import (
 	"context"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
@@ -20,13 +21,13 @@ RETURNING id, user_id, token, expiry_date, created_at
 `
 
 type CreateRefreshTokenParams struct {
-	UserID     int64     `json:"user_id"`
-	Token      string    `json:"token"`
-	ExpiryDate time.Time `json:"expiry_date"`
+	UserID     int64              `json:"user_id"`
+	Token      string             `json:"token"`
+	ExpiryDate pgtype.Timestamptz `json:"expiry_date"`
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error) {
-	row := q.db.QueryRowContext(ctx, createRefreshToken, arg.UserID, arg.Token, arg.ExpiryDate)
+	row := q.db.QueryRow(ctx, createRefreshToken, arg.UserID, arg.Token, arg.ExpiryDate)
 	var i RefreshToken
 	err := row.Scan(
 		&i.ID,
@@ -44,7 +45,7 @@ WHERE token = $1
 `
 
 func (q *Queries) DeleteRefreshToken(ctx context.Context, token string) error {
-	_, err := q.db.ExecContext(ctx, deleteRefreshToken, token)
+	_, err := q.db.Exec(ctx, deleteRefreshToken, token)
 	return err
 }
 
@@ -54,7 +55,7 @@ WHERE user_id = $1
 `
 
 func (q *Queries) DeleteRefreshTokensByUser(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteRefreshTokensByUser, userID)
+	_, err := q.db.Exec(ctx, deleteRefreshTokensByUser, userID)
 	return err
 }
 
@@ -64,7 +65,7 @@ WHERE token = $1 LIMIT 1
 `
 
 func (q *Queries) GetRefreshToken(ctx context.Context, token string) (RefreshToken, error) {
-	row := q.db.QueryRowContext(ctx, getRefreshToken, token)
+	row := q.db.QueryRow(ctx, getRefreshToken, token)
 	var i RefreshToken
 	err := row.Scan(
 		&i.ID,

@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
@@ -25,7 +24,7 @@ func (u *Usecase) GetSuggestedUsers(ctx context.Context, page, size int32, viewe
 			FollowerID: *viewerID,
 			Limit:      size,
 			Offset:     page * size,
-			ViewerID:   sql.NullInt64{Int64: *viewerID, Valid: true},
+			ViewerID:   viewerID,
 		})
 		if err != nil {
 			return nil, err

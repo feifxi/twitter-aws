@@ -7,9 +7,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
-
-	"github.com/lib/pq"
 )
 
 const countFollowersUsers = `-- name: CountFollowersUsers :one
@@ -19,7 +16,7 @@ WHERE f.following_id = $1
 `
 
 func (q *Queries) CountFollowersUsers(ctx context.Context, followingID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFollowersUsers, followingID)
+	row := q.db.QueryRow(ctx, countFollowersUsers, followingID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -32,7 +29,7 @@ WHERE f.follower_id = $1
 `
 
 func (q *Queries) CountFollowingUsers(ctx context.Context, followerID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFollowingUsers, followerID)
+	row := q.db.QueryRow(ctx, countFollowingUsers, followerID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -45,8 +42,8 @@ WHERE u.username ILIKE '%' || $1 || '%'
    OR u.display_name ILIKE '%' || $1 || '%'
 `
 
-func (q *Queries) CountSearchUsers(ctx context.Context, dollar_1 sql.NullString) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSearchUsers, dollar_1)
+func (q *Queries) CountSearchUsers(ctx context.Context, dollar_1 *string) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchUsers, dollar_1)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -59,7 +56,7 @@ WHERE u.id != $1
 `
 
 func (q *Queries) CountSuggestedUsers(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSuggestedUsers, id)
+	row := q.db.QueryRow(ctx, countSuggestedUsers, id)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -70,7 +67,7 @@ SELECT COUNT(*) FROM users
 `
 
 func (q *Queries) CountTopUsers(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTopUsers)
+	row := q.db.QueryRow(ctx, countTopUsers)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -86,17 +83,17 @@ RETURNING id, username, email, display_name, bio, avatar_url, role, provider, fo
 `
 
 type CreateUserParams struct {
-	Username    string         `json:"username"`
-	Email       string         `json:"email"`
-	DisplayName sql.NullString `json:"display_name"`
-	Bio         sql.NullString `json:"bio"`
-	AvatarUrl   sql.NullString `json:"avatar_url"`
-	Role        string         `json:"role"`
-	Provider    string         `json:"provider"`
+	Username    string  `json:"username"`
+	Email       string  `json:"email"`
+	DisplayName *string `json:"display_name"`
+	Bio         *string `json:"bio"`
+	AvatarUrl   *string `json:"avatar_url"`
+	Role        string  `json:"role"`
+	Provider    string  `json:"provider"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser,
+	row := q.db.QueryRow(ctx, createUser,
 		arg.Username,
 		arg.Email,
 		arg.DisplayName,
@@ -131,8 +128,8 @@ WHERE u.id = $1 LIMIT 1
 `
 
 type GetUserParams struct {
-	ID       int64         `json:"id"`
-	ViewerID sql.NullInt64 `json:"viewer_id"`
+	ID       int64  `json:"id"`
+	ViewerID *int64 `json:"viewer_id"`
 }
 
 type GetUserRow struct {
@@ -141,7 +138,7 @@ type GetUserRow struct {
 }
 
 func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (GetUserRow, error) {
-	row := q.db.QueryRowContext(ctx, getUser, arg.ID, arg.ViewerID)
+	row := q.db.QueryRow(ctx, getUser, arg.ID, arg.ViewerID)
 	var i GetUserRow
 	err := row.Scan(
 		&i.User.ID,
@@ -167,7 +164,7 @@ WHERE email = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -192,7 +189,7 @@ WHERE username = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -219,8 +216,8 @@ WHERE u.id = ANY($2::bigint[])
 `
 
 type GetUsersByIDsParams struct {
-	ViewerID sql.NullInt64 `json:"viewer_id"`
-	UserIds  []int64       `json:"user_ids"`
+	ViewerID *int64  `json:"viewer_id"`
+	UserIds  []int64 `json:"user_ids"`
 }
 
 type GetUsersByIDsRow struct {
@@ -229,7 +226,7 @@ type GetUsersByIDsRow struct {
 }
 
 func (q *Queries) GetUsersByIDs(ctx context.Context, arg GetUsersByIDsParams) ([]GetUsersByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUsersByIDs, arg.ViewerID, pq.Array(arg.UserIds))
+	rows, err := q.db.Query(ctx, getUsersByIDs, arg.ViewerID, arg.UserIds)
 	if err != nil {
 		return nil, err
 	}
@@ -256,9 +253,6 @@ func (q *Queries) GetUsersByIDs(ctx context.Context, arg GetUsersByIDsParams) ([
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -277,7 +271,7 @@ type IsFollowingParams struct {
 }
 
 func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isFollowing, arg.FollowerID, arg.FollowingID)
+	row := q.db.QueryRow(ctx, isFollowing, arg.FollowerID, arg.FollowingID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -294,10 +288,10 @@ LIMIT $2 OFFSET $3
 `
 
 type ListFollowersUsersParams struct {
-	FollowingID int64         `json:"following_id"`
-	Limit       int32         `json:"limit"`
-	Offset      int32         `json:"offset"`
-	ViewerID    sql.NullInt64 `json:"viewer_id"`
+	FollowingID int64  `json:"following_id"`
+	Limit       int32  `json:"limit"`
+	Offset      int32  `json:"offset"`
+	ViewerID    *int64 `json:"viewer_id"`
 }
 
 type ListFollowersUsersRow struct {
@@ -306,7 +300,7 @@ type ListFollowersUsersRow struct {
 }
 
 func (q *Queries) ListFollowersUsers(ctx context.Context, arg ListFollowersUsersParams) ([]ListFollowersUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFollowersUsers,
+	rows, err := q.db.Query(ctx, listFollowersUsers,
 		arg.FollowingID,
 		arg.Limit,
 		arg.Offset,
@@ -338,9 +332,6 @@ func (q *Queries) ListFollowersUsers(ctx context.Context, arg ListFollowersUsers
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -358,10 +349,10 @@ LIMIT $2 OFFSET $3
 `
 
 type ListFollowingUsersParams struct {
-	FollowerID int64         `json:"follower_id"`
-	Limit      int32         `json:"limit"`
-	Offset     int32         `json:"offset"`
-	ViewerID   sql.NullInt64 `json:"viewer_id"`
+	FollowerID int64  `json:"follower_id"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+	ViewerID   *int64 `json:"viewer_id"`
 }
 
 type ListFollowingUsersRow struct {
@@ -370,7 +361,7 @@ type ListFollowingUsersRow struct {
 }
 
 func (q *Queries) ListFollowingUsers(ctx context.Context, arg ListFollowingUsersParams) ([]ListFollowingUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFollowingUsers,
+	rows, err := q.db.Query(ctx, listFollowingUsers,
 		arg.FollowerID,
 		arg.Limit,
 		arg.Offset,
@@ -402,9 +393,6 @@ func (q *Queries) ListFollowingUsers(ctx context.Context, arg ListFollowingUsers
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -422,10 +410,10 @@ LIMIT $2 OFFSET $3
 `
 
 type ListSuggestedUsersParams struct {
-	FollowerID int64         `json:"follower_id"`
-	Limit      int32         `json:"limit"`
-	Offset     int32         `json:"offset"`
-	ViewerID   sql.NullInt64 `json:"viewer_id"`
+	FollowerID int64  `json:"follower_id"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+	ViewerID   *int64 `json:"viewer_id"`
 }
 
 type ListSuggestedUsersRow struct {
@@ -434,7 +422,7 @@ type ListSuggestedUsersRow struct {
 }
 
 func (q *Queries) ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsersParams) ([]ListSuggestedUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSuggestedUsers,
+	rows, err := q.db.Query(ctx, listSuggestedUsers,
 		arg.FollowerID,
 		arg.Limit,
 		arg.Offset,
@@ -466,9 +454,6 @@ func (q *Queries) ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsers
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -487,7 +472,7 @@ type ListTopUsersParams struct {
 }
 
 func (q *Queries) ListTopUsers(ctx context.Context, arg ListTopUsersParams) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, listTopUsers, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listTopUsers, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -513,9 +498,6 @@ func (q *Queries) ListTopUsers(ctx context.Context, arg ListTopUsersParams) ([]U
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -533,10 +515,10 @@ LIMIT $2 OFFSET $3
 `
 
 type SearchUsersParams struct {
-	Column1  sql.NullString `json:"column_1"`
-	Limit    int32          `json:"limit"`
-	Offset   int32          `json:"offset"`
-	ViewerID sql.NullInt64  `json:"viewer_id"`
+	Column1  *string `json:"column_1"`
+	Limit    int32   `json:"limit"`
+	Offset   int32   `json:"offset"`
+	ViewerID *int64  `json:"viewer_id"`
 }
 
 type SearchUsersRow struct {
@@ -545,7 +527,7 @@ type SearchUsersRow struct {
 }
 
 func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchUsers,
+	rows, err := q.db.Query(ctx, searchUsers,
 		arg.Column1,
 		arg.Limit,
 		arg.Offset,
@@ -577,9 +559,6 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Sea
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -598,14 +577,14 @@ RETURNING id, username, email, display_name, bio, avatar_url, role, provider, fo
 `
 
 type UpdateUserProfileParams struct {
-	ID          int64          `json:"id"`
-	Bio         sql.NullString `json:"bio"`
-	DisplayName sql.NullString `json:"display_name"`
-	AvatarUrl   sql.NullString `json:"avatar_url"`
+	ID          int64   `json:"id"`
+	Bio         *string `json:"bio"`
+	DisplayName *string `json:"display_name"`
+	AvatarUrl   *string `json:"avatar_url"`
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, updateUserProfile,
+	row := q.db.QueryRow(ctx, updateUserProfile,
 		arg.ID,
 		arg.Bio,
 		arg.DisplayName,

@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 	"strings"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
@@ -24,7 +23,7 @@ type UpdateProfileInput struct {
 }
 
 func (u *Usecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {
-	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: nullViewerID(viewerID)})
+	user, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: viewerID})
 	if err != nil {
 		return UserItem{}, err
 	}
@@ -50,17 +49,17 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 		if err != nil {
 			return db.User{}, err
 		}
-		newAvatar = sql.NullString{String: uploadedAvatarURL, Valid: true}
+		newAvatar = &uploadedAvatarURL
 	}
 
 	bio := existingUser.User.Bio
 	if input.Bio != nil {
-		bio = nullStringFromPtr(input.Bio)
+		bio = input.Bio
 	}
 
 	displayName := existingUser.User.DisplayName
 	if input.DisplayName != nil {
-		displayName = nullStringFromPtr(input.DisplayName)
+		displayName = input.DisplayName
 	}
 
 	updatedUser, err := u.store.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
@@ -76,15 +75,15 @@ func (u *Usecase) UpdateProfile(ctx context.Context, userID int64, input UpdateP
 		return db.User{}, err
 	}
 
-	if uploadedAvatarURL != "" && existingUser.User.AvatarUrl.Valid {
-		_ = u.storage.DeleteFile(ctx, existingUser.User.AvatarUrl.String)
+	if uploadedAvatarURL != "" && existingUser.User.AvatarUrl != nil {
+		_ = u.storage.DeleteFile(ctx, *existingUser.User.AvatarUrl)
 	}
 
 	return updatedUser, nil
 }
 
 func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64) (bool, error) {
-	targetUser, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: sql.NullInt64{Valid: false}})
+	targetUser, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: nil})
 	if err != nil {
 		return false, err
 	}
@@ -115,7 +114,7 @@ func (u *Usecase) FollowUser(ctx context.Context, followerID, targetUserID int64
 }
 
 func (u *Usecase) UnfollowUser(ctx context.Context, followerID, targetUserID int64) error {
-	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: sql.NullInt64{Valid: false}}); err != nil {
+	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: nil}); err != nil {
 		return err
 	}
 
@@ -124,7 +123,7 @@ func (u *Usecase) UnfollowUser(ctx context.Context, followerID, targetUserID int
 }
 
 func (u *Usecase) ListFollowers(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
-	vID := nullViewerID(viewerID)
+	vID := viewerID
 	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID}); err != nil {
 		return nil, err
 	}
@@ -147,7 +146,7 @@ func (u *Usecase) ListFollowers(ctx context.Context, targetUserID int64, page, s
 }
 
 func (u *Usecase) ListFollowing(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
-	vID := nullViewerID(viewerID)
+	vID := viewerID
 	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID}); err != nil {
 		return nil, err
 	}
