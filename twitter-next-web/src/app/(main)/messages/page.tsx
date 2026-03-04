@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-import { Search, Settings, MailPlus, MoreHorizontal, Image as ImageIcon, Smile, Send, Globe } from 'lucide-react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { Search, MailPlus, Send, Globe } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,7 +50,6 @@ export default function MessagesPage() {
   const { user, isLoggedIn } = useAuth();
   const queryClient = useQueryClient();
   
-  // Default to global room if unauthenticated, or if auth'd and no prior selection
   const [activeChat, setActiveChat] = useState<ActiveChat>({ type: 'global', key: 'global' });
   const [messageInput, setMessageInput] = useState('');
   
@@ -58,6 +57,16 @@ export default function MessagesPage() {
   const [isNewMessageOpen, setIsNewMessageOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 300);
+  
+  // DM List Search State
+  const [dmSearchQuery, setDmSearchQuery] = useState('');
+  const [appliedDmSearchQuery, setAppliedDmSearchQuery] = useState('');
+  
+  // Scroll refs
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const prevActiveChatRef = useRef<string>('');
   
   const { data: searchResults, isLoading: isSearchLoading } = useQuery({
     queryKey: ['users', 'search', debouncedSearch],
@@ -78,19 +87,18 @@ export default function MessagesPage() {
 
   const startPrivateChatMutation = useSendMessageToUser();
 
-  const handleStartConversation = async (user: UserResponse) => {
-    // Check if we already have an existing conversation with this user
-    const existing = conversations.find(c => c.peer.id === user.id);
+  const handleStartConversation = async (selectedUser: UserResponse) => {
+    const existing = conversations.find(c => c.peer.id === selectedUser.id);
     if (existing) {
       setActiveChat({ type: 'private', id: existing.id });
     } else {
-      setActiveChat({ type: 'new_private', user });
+      setActiveChat({ type: 'new_private', user: selectedUser });
     }
     setIsNewMessageOpen(false);
     setSearchQuery('');
   };
 
-  // 1. WebSocket Hook (Handles real-time updates for auth'd and unauth'd)
+  // 1. WebSocket Hook
   useChatWebSocket();
 
   // 2. Private DMs Queries (Auth Only)
@@ -101,40 +109,118 @@ export default function MessagesPage() {
   );
   
   const privateId = activeChat.type === 'private' ? activeChat.id : null;
-  const { data: dmPages, isLoading: dmsLoading } = useConversationMessages(privateId);
+  const { 
+    data: dmPages, 
+    isLoading: dmsLoading,
+    hasNextPage: dmHasNextPage,
+    fetchNextPage: dmFetchNextPage,
+    isFetchingNextPage: dmIsFetchingNextPage 
+  } = useConversationMessages(privateId);
   const sendDMMutation = useSendMessageToConversation();
 
   // 3. Global Room Queries (Everyone)
   const globalKey = activeChat.type === 'global' ? activeChat.key : '';
-  const { data: globalPages, isLoading: globalLoading } = usePublicRoomMessages(globalKey);
+  const { 
+    data: globalPages, 
+    isLoading: globalLoading,
+    hasNextPage: globalHasNextPage,
+    fetchNextPage: globalFetchNextPage,
+    isFetchingNextPage: globalIsFetchingNextPage 
+  } = usePublicRoomMessages(globalKey);
   const sendGlobalMutation = useSendPublicRoomMessage();
 
-  // Optional: Poll Global Room if unauthenticated (since they can't use WebSocket securely per our architecture rule)
+  // Poll Global Room if unauthenticated
   useEffect(() => {
     if (!isLoggedIn && activeChat.type === 'global') {
       const interval = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: publicRoomMessagesQueryKey(activeChat.key) });
-      }, 5000); // poll every 5s
+      }, 5000);
       return () => clearInterval(interval);
     }
   }, [isLoggedIn, activeChat, queryClient]);
 
-  // Derived State
-  const messagesData = useMemo<(MessageResponse | PublicRoomMessageResponse)[]>(() => {
-    if (activeChat.type === 'global') {
-      return globalPages?.pages.flatMap((p) => p.items) ?? [];
-    }
-    return dmPages?.pages.flatMap((p) => p.items) ?? [];
-  }, [activeChat.type, globalPages, dmPages]);
+  // Derived State: sort oldest-first for natural top→bottom chat display
+  const rawMessages: (MessageResponse | PublicRoomMessageResponse)[] = activeChat.type === 'global'
+    ? (globalPages?.pages.flatMap((p) => p.items) ?? [])
+    : (dmPages?.pages.flatMap((p) => p.items) ?? []);
+  const messagesData = [...rawMessages].sort((a, b) => 
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
 
   const isLoadingMessages = activeChat.type === 'global' ? globalLoading : dmsLoading;
+  const hasNextPage = activeChat.type === 'global' ? globalHasNextPage : dmHasNextPage;
+  const isFetchingNextPage = activeChat.type === 'global' ? globalIsFetchingNextPage : dmIsFetchingNextPage;
+  
+  const fetchNextPage = useCallback(() => {
+    if (activeChat.type === 'global') {
+      globalFetchNextPage();
+    } else if (activeChat.type === 'private') {
+      dmFetchNextPage();
+    }
+  }, [activeChat, globalFetchNextPage, dmFetchNextPage]);
 
   const currentPrivateConversation = conversations.find((c) => c.id === privateId);
+
+  // Auto-scroll to bottom when chat changes or new messages arrive
+  const activeChatKey = activeChat.type === 'global' ? 'global' : activeChat.type === 'private' ? `private-${activeChat.id}` : `new-${activeChat.type === 'new_private' ? activeChat.user.id : ''}`;
+  
+  useEffect(() => {
+    // Always scroll to bottom when switching chats
+    if (prevActiveChatRef.current !== activeChatKey) {
+      prevActiveChatRef.current = activeChatKey;
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      }, 50);
+    }
+  }, [activeChatKey]);
+
+  // Scroll to bottom when messages load for the first time or new messages arrive
+  useEffect(() => {
+    if (!isLoadingMessages && messagesData.length > 0) {
+      const container = messagesContainerRef.current;
+      if (!container) return;
+      // Only auto-scroll if we're near the bottom (within 150px)
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+      if (isNearBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [messagesData.length, isLoadingMessages]);
+
+  // IntersectionObserver for loading older messages when scrolling to top
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    if (!sentinel) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          const container = messagesContainerRef.current;
+          const prevScrollHeight = container?.scrollHeight || 0;
+          
+          fetchNextPage();
+          
+          // After fetch, restore scroll position so user doesn't jump
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (container) {
+                const newScrollHeight = container.scrollHeight;
+                container.scrollTop += newScrollHeight - prevScrollHeight;
+              }
+            });
+          });
+        }
+      },
+      { root: messagesContainerRef.current, threshold: 0.1 }
+    );
+    
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleSendMessage = async () => {
     if (!messageInput.trim()) return;
     
-    // Safety check for unauth users
     if (!isLoggedIn) {
       toast.error('You must log in to send messages.');
       return;
@@ -150,6 +236,10 @@ export default function MessagesPage() {
         setActiveChat({ type: 'private', id: msg.conversationId });
       }
       setMessageInput('');
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to send message');
     }
@@ -157,8 +247,8 @@ export default function MessagesPage() {
 
   return (
     <div className="flex h-screen max-h-screen overflow-hidden">
-      {/* Sidebar: Chat List */}
-      <div className={`flex-1 md:flex-[0.4] border-r border-border flex flex-col ${activeChat !== null ? 'hidden md:flex' : 'flex'}`}>
+      {/* Sidebar: Chat List — fixed width, never expands */}
+      <div className={`w-[320px] min-w-[280px] max-w-[360px] border-r border-border flex flex-col shrink-0 ${activeChat !== null ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background/80 backdrop-blur-md z-10">
@@ -197,7 +287,7 @@ export default function MessagesPage() {
                             className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg cursor-pointer transition-colors"
                             onClick={() => handleStartConversation(u)}
                           >
-                            <Avatar className="w-10 h-10">
+                            <Avatar className="w-10 h-10 shrink-0">
                               <AvatarImage src={u.avatarUrl ?? undefined} />
                               <AvatarFallback>{(u.displayName || u.username)[0]}</AvatarFallback>
                             </Avatar>
@@ -226,6 +316,13 @@ export default function MessagesPage() {
                 type="text" 
                 placeholder="Search Direct Messages" 
                 className="w-full bg-card text-foreground rounded-full py-2 pl-10 pr-4 outline-none border border-transparent focus:border-primary focus:bg-background placeholder-muted-foreground transition-all text-[15px]"
+                value={dmSearchQuery}
+                onChange={(e) => setDmSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setAppliedDmSearchQuery(dmSearchQuery);
+                  }
+                }}
               />
             </div>
           </div>
@@ -255,23 +352,29 @@ export default function MessagesPage() {
               {!conversationsLoading && conversations.length === 0 && (
                 <div className="px-4 py-6 text-muted-foreground text-center">No private conversations yet.</div>
               )}
-              {conversations.map((conv) => (
+              {conversations.filter((conv) => {
+                if (!appliedDmSearchQuery) return true;
+                const lowerQuery = appliedDmSearchQuery.toLowerCase();
+                const peerName = (conv.peer.displayName || '').toLowerCase();
+                const peerUsername = (conv.peer.username || '').toLowerCase();
+                return peerName.includes(lowerQuery) || peerUsername.includes(lowerQuery);
+              }).map((conv) => (
                 <div 
                   key={conv.id}
                   onClick={() => setActiveChat({ type: 'private', id: conv.id })}
                   className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-card ${activeChat.type === 'private' && activeChat.id === conv.id ? 'border-r-2 border-r-primary bg-card' : ''}`}
                 >
-                  <Avatar className="w-10 h-10">
+                  <Avatar className="w-10 h-10 shrink-0">
                     <AvatarImage src={conv.peer.avatarUrl ?? undefined} />
                     <AvatarFallback>{(conv.peer.displayName || conv.peer.username)[0]}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline">
+                    <div className="flex justify-between items-baseline gap-2">
                       <div className="truncate text-foreground font-bold text-[15px]">
                         {conv.peer.displayName || conv.peer.username}
                         <span className="font-normal text-muted-foreground ml-1">@{conv.peer.username}</span>
                       </div>
-                      <span className="text-muted-foreground text-[13px] whitespace-nowrap ml-1">{formatRelativeTime(conv.lastMessage.createdAt)}</span>
+                      <span className="text-muted-foreground text-[13px] whitespace-nowrap shrink-0">{formatRelativeTime(conv.lastMessage.createdAt)}</span>
                     </div>
                     <div className="text-muted-foreground text-[15px] truncate">
                       {conv.lastMessage.content}
@@ -289,49 +392,59 @@ export default function MessagesPage() {
       </div>
 
       {/* Main Thread View */}
-      <div className={`flex-1 flex flex-col ${activeChat ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 ${activeChat ? 'flex' : 'hidden md:flex'}`}>
         {/* Thread Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               {/* Back button on mobile */}
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="md:hidden -ml-2 rounded-full"
-                // onClick={() => setActiveChat(null)}  // Removed to avoid null state bug on mobile for now
+                className="md:hidden -ml-2 rounded-full shrink-0"
+                onClick={() => setActiveChat({ type: 'global', key: 'global' })}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><g><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"></path></g></svg>
               </Button>
               
               {activeChat.type === 'global' ? (
-                 <div className="flex flex-col">
-                  <span className="font-bold text-[17px] text-foreground">Global Chat</span>
+                 <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-[17px] text-foreground truncate">Global Chat</span>
                   <span className="text-[13px] text-muted-foreground">Anyone can join</span>
                 </div>
               ) : activeChat.type === 'new_private' ? (
-                <div className="flex flex-col">
-                  <span className="font-bold text-[17px] text-foreground">{activeChat.user.displayName || activeChat.user.username}</span>
-                  <span className="text-[13px] text-muted-foreground">@{activeChat.user.username}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-[17px] text-foreground truncate">{activeChat.user.displayName || activeChat.user.username}</span>
+                  <span className="text-[13px] text-muted-foreground truncate">@{activeChat.user.username}</span>
                 </div>
               ) : currentPrivateConversation ? (
-                <div className="flex flex-col">
-                  <span className="font-bold text-[17px] text-foreground">{currentPrivateConversation.peer.displayName || currentPrivateConversation.peer.username}</span>
-                  <span className="text-[13px] text-muted-foreground">@{currentPrivateConversation.peer.username}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-[17px] text-foreground truncate">{currentPrivateConversation.peer.displayName || currentPrivateConversation.peer.username}</span>
+                  <span className="text-[13px] text-muted-foreground truncate">@{currentPrivateConversation.peer.username}</span>
                 </div>
               ) : <div />}
             </div>
-            
-            <Button variant="ghost" size="icon" className="rounded-full text-foreground hover:bg-card">
-              <MoreHorizontal className="w-5 h-5" />
-            </Button>
         </div>
 
         {/* Thread Messages */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-          {isLoadingMessages && activeChat.type !== 'new_private' && <div className="text-muted-foreground text-center">Loading messages...</div>}
-          {(!isLoadingMessages || activeChat.type === 'new_private') && messagesData.length === 0 && (
-            <div className="text-muted-foreground text-center mt-10">Start the conversation.</div>
+        <div 
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto p-4 flex flex-col gap-3"
+        >
+          {/* Top sentinel for infinite scroll up */}
+          <div ref={topSentinelRef} className="h-1 shrink-0" />
+          
+          {isFetchingNextPage && (
+            <div className="text-muted-foreground text-center text-sm py-2">Loading older messages...</div>
           )}
+          
+          {isLoadingMessages && activeChat.type !== 'new_private' && (
+            <div className="text-muted-foreground text-center flex-1 flex items-center justify-center">Loading messages...</div>
+          )}
+          
+          {(!isLoadingMessages || activeChat.type === 'new_private') && messagesData.length === 0 && (
+            <div className="text-muted-foreground text-center flex-1 flex items-center justify-center">Start the conversation.</div>
+          )}
+          
           {activeChat.type !== 'new_private' && messagesData.map((message) => {
             const isMine = isLoggedIn && message.sender.id === user?.id;
             return (
@@ -339,17 +452,17 @@ export default function MessagesPage() {
                 {/* For Global Room, show sender info if not me */}
                 {!isMine && activeChat.type === 'global' && (
                   <div className="text-[13px] font-bold text-foreground mb-1 ml-1 flex items-center gap-2">
-                    <Avatar className="w-5 h-5">
+                    <Avatar className="w-5 h-5 shrink-0">
                       <AvatarImage src={message.sender.avatarUrl ?? undefined} />
                       <AvatarFallback>{(message.sender.displayName || message.sender.username)[0]}</AvatarFallback>
                     </Avatar>
-                    <span>{message.sender.displayName || message.sender.username}</span>
-                    <span className="font-normal text-muted-foreground">@{message.sender.username}</span>
+                    <span className="truncate max-w-[120px]">{message.sender.displayName || message.sender.username}</span>
+                    <span className="font-normal text-muted-foreground truncate max-w-[100px]">@{message.sender.username}</span>
                   </div>
                 )}
                 
                 <div
-                  className={`px-4 py-3 rounded-2xl text-[15px] border ${
+                  className={`px-4 py-3 rounded-2xl text-[15px] border break-words ${
                     isMine
                       ? 'bg-primary text-primary-foreground border-primary rounded-br-none'
                       : 'bg-card text-foreground border-border rounded-bl-none'
@@ -363,6 +476,9 @@ export default function MessagesPage() {
               </div>
             );
           })}
+          
+          {/* Bottom anchor for auto-scroll */}
+          <div ref={messagesEndRef} className="h-0 shrink-0" />
         </div>
 
         {/* Thread Input */}
@@ -384,14 +500,14 @@ export default function MessagesPage() {
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  disabled={sendGlobalMutation.isPending || sendDMMutation.isPending}
+                  disabled={sendGlobalMutation.isPending || sendDMMutation.isPending || startPrivateChatMutation.isPending}
                 />
                 <Button 
                   variant="ghost" 
                   size="icon" 
                   className={`rounded-full w-9 h-9 transition-colors ${messageInput.trim() ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground cursor-default hover:bg-transparent'}`}
                   onClick={handleSendMessage}
-                  disabled={!messageInput.trim() || sendGlobalMutation.isPending || sendDMMutation.isPending}
+                  disabled={!messageInput.trim() || sendGlobalMutation.isPending || sendDMMutation.isPending || startPrivateChatMutation.isPending}
                 >
                   <Send className="w-5 h-5" />
                 </Button>
