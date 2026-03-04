@@ -11,16 +11,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
-	"github.com/rs/zerolog/log"
+	// "github.com/rs/zerolog/log"
 )
 
 func (server *Server) setupRouter() {
 	configureValidationFieldNames()
 
 	router := gin.New()
-	if err := router.SetTrustedProxies(parseTrustedProxies(server.config.TrustedProxies)); err != nil {
-		log.Warn().Err(err).Msg("Failed to set trusted proxies, falling back to default proxy behavior")
-	}
+	// if err := router.SetTrustedProxies(parseTrustedProxies(server.config.TrustedProxies)); err != nil {
+	// 	log.Warn().Err(err).Msg("Failed to set trusted proxies, falling back to default proxy behavior")
+	// }
 	if server.config.MaxMultipartMemoryBytes > 0 {
 		router.MaxMultipartMemory = server.config.MaxMultipartMemoryBytes
 	}
