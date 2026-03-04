@@ -147,6 +147,29 @@ type notificationResponse struct {
 	CreatedAt             time.Time    `json:"createdAt"`
 }
 
+type messageResponse struct {
+	ID             int64        `json:"id"`
+	ConversationID int64        `json:"conversationId"`
+	Sender         userResponse `json:"sender"`
+	Content        string       `json:"content"`
+	CreatedAt      time.Time    `json:"createdAt"`
+}
+
+type publicMessageResponse struct {
+	ID        int64        `json:"id"`
+	RoomKey   string       `json:"roomKey"`
+	Sender    userResponse `json:"sender"`
+	Content   string       `json:"content"`
+	CreatedAt time.Time    `json:"createdAt"`
+}
+
+type conversationResponse struct {
+	ID          int64           `json:"id"`
+	Peer        userResponse    `json:"peer"`
+	LastMessage messageResponse `json:"lastMessage"`
+	UpdatedAt   time.Time       `json:"updatedAt"`
+}
+
 func newNotificationResponse(item usecase.NotificationItem) notificationResponse {
 	var tweetID *int64
 	if item.TweetID != nil {
@@ -165,6 +188,35 @@ func newNotificationResponse(item usecase.NotificationItem) notificationResponse
 		Type:                  item.Type,
 		IsRead:                item.IsRead,
 		CreatedAt:             item.CreatedAt,
+	}
+}
+
+func newMessageResponse(item usecase.MessageItem) messageResponse {
+	return messageResponse{
+		ID:             item.ID,
+		ConversationID: item.ConversationID,
+		Sender:         newUserResponse(item.Sender),
+		Content:        item.Content,
+		CreatedAt:      item.CreatedAt,
+	}
+}
+
+func newConversationResponse(item usecase.ConversationItem) conversationResponse {
+	return conversationResponse{
+		ID:          item.ID,
+		Peer:        newUserResponse(item.Peer),
+		LastMessage: newMessageResponse(item.LastMessage),
+		UpdatedAt:   item.UpdatedAt,
+	}
+}
+
+func newPublicMessageResponse(item usecase.PublicRoomMessageItem) publicMessageResponse {
+	return publicMessageResponse{
+		ID:        item.ID,
+		RoomKey:   item.RoomKey,
+		Sender:    newUserResponse(item.Sender),
+		Content:   item.Content,
+		CreatedAt: item.CreatedAt,
 	}
 }
 
@@ -200,6 +252,30 @@ func newNotificationResponseList(items []usecase.NotificationItem) []notificatio
 	response := make([]notificationResponse, 0, len(items))
 	for _, item := range items {
 		response = append(response, newNotificationResponse(item))
+	}
+	return response
+}
+
+func newMessageResponseList(items []usecase.MessageItem) []messageResponse {
+	response := make([]messageResponse, 0, len(items))
+	for _, item := range items {
+		response = append(response, newMessageResponse(item))
+	}
+	return response
+}
+
+func newConversationResponseList(items []usecase.ConversationItem) []conversationResponse {
+	response := make([]conversationResponse, 0, len(items))
+	for _, item := range items {
+		response = append(response, newConversationResponse(item))
+	}
+	return response
+}
+
+func newPublicMessageResponseList(items []usecase.PublicRoomMessageItem) []publicMessageResponse {
+	response := make([]publicMessageResponse, 0, len(items))
+	for _, item := range items {
+		response = append(response, newPublicMessageResponse(item))
 	}
 	return response
 }

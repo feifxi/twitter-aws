@@ -1,207 +1,403 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, Settings, MailPlus, MoreHorizontal, Image as ImageIcon, Smile, Send } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Search, Settings, MailPlus, MoreHorizontal, Image as ImageIcon, Smile, Send, Globe } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { 
+  useConversations, 
+  useConversationMessages, 
+  useSendMessageToConversation,
+  usePublicRoomMessages,
+  useSendPublicRoomMessage,
+  useSendMessageToUser
+} from '@/hooks/useMessages';
+import { useChatWebSocket } from '@/hooks/useChatWebSocket';
+import { useAuth } from '@/hooks/useAuth';
+import type { ConversationResponse, MessageResponse, PublicRoomMessageResponse, UserResponse } from '@/types';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { publicRoomMessagesQueryKey } from '@/hooks/useMessages';
+import { useSuggestedUsers } from '@/hooks/useDiscovery';
+import { axiosInstance } from '@/api/axiosInstance';
+import { useDebounce } from '@/hooks/useDebounce';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-// Mock Data
-const MOCK_CONVERSATIONS = [
-  {
-    id: 1,
-    user: {
-      name: 'Elon Musk',
-      handle: 'elonmusk',
-      avatar: 'https://pbs.twimg.com/profile_images/1780044485541699584/p78MCn3B_400x400.jpg',
-    },
-    lastMessage: 'โอนให้ผม 20 wallet เพื่อปลดล็อค premium   ',
-    timestamp: '2h',
-  },
-  {
-    id: 2,
-    user: {
-      name: 'พี่เต้ พระราม7',
-      handle: 'tae77',
-      avatar: 'https://static.amarintv.com/images/upload/editor/source/wonder/022566/466/346800379_621542926678487_574.jpg',
-    },
-    lastMessage: 'คุณสนใจเข้าร่วมสภาเจได และเป็นครูฝึกแร็พเตอร์หรือไม่',
-    timestamp: '1d',
-  },
+function formatRelativeTime(value: string): string {
+  const at = new Date(value).getTime();
+  const now = Date.now();
+  const diffMinutes = Math.max(1, Math.floor((now - at) / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d`;
+}
 
-    {
-    id: 4,
-    user: {
-      name: 'Tim Cook',
-      handle: 'tim_cook',
-      avatar: 'https://pbs.twimg.com/profile_images/1535420431766671360/Pwq-1eJc_400x400.jpg',
-    },
-    lastMessage: 'we detect you watch ferry porn in our iphone',
-    timestamp: '5d',
-  },
-];
+type ActiveChat = 
+  | { type: 'global'; key: string } 
+  | { type: 'private'; id: number }
+  | { type: 'new_private'; user: UserResponse };
 
 export default function MessagesPage() {
-  const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
+  const { user, isLoggedIn } = useAuth();
+  const queryClient = useQueryClient();
+  
+  // Default to global room if unauthenticated, or if auth'd and no prior selection
+  const [activeChat, setActiveChat] = useState<ActiveChat>({ type: 'global', key: 'global' });
   const [messageInput, setMessageInput] = useState('');
+  
+  // New Message Modal State
+  const [isNewMessageOpen, setIsNewMessageOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  
+  const { data: searchResults, isLoading: isSearchLoading } = useQuery({
+    queryKey: ['users', 'search', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch) return [];
+      const res = await axiosInstance.get<{ items: UserResponse[] }>('/search/users', { 
+        params: { q: debouncedSearch, size: 10 } 
+      });
+      return res.data.items;
+    },
+    enabled: debouncedSearch.length > 0 && isLoggedIn
+  });
+  
+  const { data: suggestedUsersData, isLoading: isSuggestedLoading } = useSuggestedUsers(10);
+  
+  const displayUsers = debouncedSearch.length > 0 ? (searchResults || []) : (suggestedUsersData?.items || []);
+  const isUserListLoading = debouncedSearch.length > 0 ? isSearchLoading : isSuggestedLoading;
 
-  const currentConversation = MOCK_CONVERSATIONS.find(c => c.id === selectedConversation);
+  const startPrivateChatMutation = useSendMessageToUser();
 
-  const handleSendMessage = () => {
+  const handleStartConversation = async (user: UserResponse) => {
+    // Check if we already have an existing conversation with this user
+    const existing = conversations.find(c => c.peer.id === user.id);
+    if (existing) {
+      setActiveChat({ type: 'private', id: existing.id });
+    } else {
+      setActiveChat({ type: 'new_private', user });
+    }
+    setIsNewMessageOpen(false);
+    setSearchQuery('');
+  };
+
+  // 1. WebSocket Hook (Handles real-time updates for auth'd and unauth'd)
+  useChatWebSocket();
+
+  // 2. Private DMs Queries (Auth Only)
+  const { data: conversationPages, isLoading: conversationsLoading } = useConversations();
+  const conversations = useMemo<ConversationResponse[]>(
+    () => conversationPages?.pages.flatMap((p) => p.items) ?? [],
+    [conversationPages],
+  );
+  
+  const privateId = activeChat.type === 'private' ? activeChat.id : null;
+  const { data: dmPages, isLoading: dmsLoading } = useConversationMessages(privateId);
+  const sendDMMutation = useSendMessageToConversation();
+
+  // 3. Global Room Queries (Everyone)
+  const globalKey = activeChat.type === 'global' ? activeChat.key : '';
+  const { data: globalPages, isLoading: globalLoading } = usePublicRoomMessages(globalKey);
+  const sendGlobalMutation = useSendPublicRoomMessage();
+
+  // Optional: Poll Global Room if unauthenticated (since they can't use WebSocket securely per our architecture rule)
+  useEffect(() => {
+    if (!isLoggedIn && activeChat.type === 'global') {
+      const interval = setInterval(() => {
+        queryClient.invalidateQueries({ queryKey: publicRoomMessagesQueryKey(activeChat.key) });
+      }, 5000); // poll every 5s
+      return () => clearInterval(interval);
+    }
+  }, [isLoggedIn, activeChat, queryClient]);
+
+  // Derived State
+  const messagesData = useMemo<(MessageResponse | PublicRoomMessageResponse)[]>(() => {
+    if (activeChat.type === 'global') {
+      return globalPages?.pages.flatMap((p) => p.items) ?? [];
+    }
+    return dmPages?.pages.flatMap((p) => p.items) ?? [];
+  }, [activeChat.type, globalPages, dmPages]);
+
+  const isLoadingMessages = activeChat.type === 'global' ? globalLoading : dmsLoading;
+
+  const currentPrivateConversation = conversations.find((c) => c.id === privateId);
+
+  const handleSendMessage = async () => {
     if (!messageInput.trim()) return;
-    toast.info("ยังทำไม่เสร็จโว้ยยยย");
-    setMessageInput('');
+    
+    // Safety check for unauth users
+    if (!isLoggedIn) {
+      toast.error('You must log in to send messages.');
+      return;
+    }
+
+    try {
+      if (activeChat.type === 'global') {
+        await sendGlobalMutation.mutateAsync({ roomKey: activeChat.key, content: messageInput });
+      } else if (activeChat.type === 'private') {
+        await sendDMMutation.mutateAsync({ conversationId: activeChat.id, content: messageInput });
+      } else if (activeChat.type === 'new_private') {
+        const msg = await startPrivateChatMutation.mutateAsync({ userId: activeChat.user.id, content: messageInput });
+        setActiveChat({ type: 'private', id: msg.conversationId });
+      }
+      setMessageInput('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to send message');
+    }
   };
 
   return (
     <div className="flex h-screen max-h-screen overflow-hidden">
-      {/* Conversation List (Hidden on mobile when chat is open) */}
-      <div className={`flex-1 md:flex-[0.4] border-r border-border flex flex-col ${selectedConversation ? 'hidden md:flex' : 'flex'}`}>
+      {/* Sidebar: Chat List */}
+      <div className={`flex-1 md:flex-[0.4] border-r border-border flex flex-col ${activeChat !== null ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background/80 backdrop-blur-md z-10">
           <h1 className="text-xl font-bold text-foreground">Messages</h1>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-card">
-              <Settings className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-card">
-              <MailPlus className="w-5 h-5" />
-            </Button>
-          </div>
+          {isLoggedIn && (
+            <div className="flex gap-2">
+              <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-full hover:bg-card">
+                    <MailPlus className="w-5 h-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>New message</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex items-center space-x-2 border-b border-border pb-4">
+                    <Search className="w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search people"
+                      className="border-0 focus-visible:ring-0 px-0 h-8"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <div className="min-h-[200px] max-h-[300px] overflow-y-auto">
+                    {isUserListLoading ? (
+                      <div className="text-center text-muted-foreground py-4">Loading...</div>
+                    ) : displayUsers.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-4">No users found</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {displayUsers.map((u) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-3 p-2 hover:bg-muted rounded-lg cursor-pointer transition-colors"
+                            onClick={() => handleStartConversation(u)}
+                          >
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={u.avatarUrl ?? undefined} />
+                              <AvatarFallback>{(u.displayName || u.username)[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <span className="font-bold text-[15px] truncate">{u.displayName || u.username}</span>
+                              <span className="text-muted-foreground text-[13px] truncate">@{u.username}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
         </div>
 
-        {/* Search */}
-        <div className="px-4 pb-2">
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-              <Search className="w-4 h-4 text-muted-foreground group-focus-within:text-primary" />
+        {isLoggedIn && (
+          <div className="px-4 pb-2">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <Search className="w-4 h-4 text-muted-foreground group-focus-within:text-primary" />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Search Direct Messages" 
+                className="w-full bg-card text-foreground rounded-full py-2 pl-10 pr-4 outline-none border border-transparent focus:border-primary focus:bg-background placeholder-muted-foreground transition-all text-[15px]"
+              />
             </div>
-            <input 
-              type="text" 
-              placeholder="Search Direct Messages" 
-              className="w-full bg-card text-foreground rounded-full py-2 pl-10 pr-4 outline-none border border-transparent focus:border-primary focus:bg-background placeholder-muted-foreground transition-all text-[15px]"
-            />
           </div>
-        </div>
+        )}
 
         {/* List */}
         <div className="flex-1 overflow-y-auto">
-          {MOCK_CONVERSATIONS.map((conv) => (
-            <div 
-              key={conv.id}
-              onClick={() => setSelectedConversation(conv.id)}
-              className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-card ${selectedConversation === conv.id ? 'border-r-2 border-primary bg-card' : ''}`}
+          {/* Pinned Global Room */}
+           <div 
+              onClick={() => setActiveChat({ type: 'global', key: 'global' })}
+              className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-card border-b border-border ${activeChat.type === 'global' ? 'border-r-2 border-r-primary bg-card' : ''}`}
             >
-              <Avatar className="w-10 h-10">
-                <AvatarImage src={conv.user.avatar} />
-                <AvatarFallback>{conv.user.name[0]}</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline">
-                  <div className="truncate text-foreground font-bold text-[15px]">
-                    {conv.user.name} 
-                    <span className="font-normal text-muted-foreground ml-1">@{conv.user.handle}</span>
-                  </div>
-                  <span className="text-muted-foreground text-[13px] whitespace-nowrap ml-1">{conv.timestamp}</span>
-                </div>
-                <div className="text-muted-foreground text-[15px] truncate">
-                  {conv.lastMessage}
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Globe className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0 flex items-center">
+                <div className="truncate text-foreground font-bold text-[15px]">
+                  Global Chat <span className="text-muted-foreground font-normal text-xs bg-muted px-2 py-0.5 rounded-full ml-1">Public</span>
                 </div>
               </div>
             </div>
-          ))}
+
+          {/* Private DMs */}
+          {isLoggedIn ? (
+            <>
+              {conversationsLoading && <div className="px-4 py-6 text-muted-foreground text-center">Loading...</div>}
+              {!conversationsLoading && conversations.length === 0 && (
+                <div className="px-4 py-6 text-muted-foreground text-center">No private conversations yet.</div>
+              )}
+              {conversations.map((conv) => (
+                <div 
+                  key={conv.id}
+                  onClick={() => setActiveChat({ type: 'private', id: conv.id })}
+                  className={`flex gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-card ${activeChat.type === 'private' && activeChat.id === conv.id ? 'border-r-2 border-r-primary bg-card' : ''}`}
+                >
+                  <Avatar className="w-10 h-10">
+                    <AvatarImage src={conv.peer.avatarUrl ?? undefined} />
+                    <AvatarFallback>{(conv.peer.displayName || conv.peer.username)[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline">
+                      <div className="truncate text-foreground font-bold text-[15px]">
+                        {conv.peer.displayName || conv.peer.username}
+                        <span className="font-normal text-muted-foreground ml-1">@{conv.peer.username}</span>
+                      </div>
+                      <span className="text-muted-foreground text-[13px] whitespace-nowrap ml-1">{formatRelativeTime(conv.lastMessage.createdAt)}</span>
+                    </div>
+                    <div className="text-muted-foreground text-[15px] truncate">
+                      {conv.lastMessage.content}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="p-6 text-center text-muted-foreground">
+              <p className="mb-4">Log in to send private direct messages.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Chat Interface (Hidden on mobile when no conversation selected) */}
-      <div className={`flex-1 flex flex-col ${!selectedConversation ? 'hidden md:flex' : 'flex'}`}>
-        {selectedConversation && currentConversation ? (
-          <>
-            {/* Chat Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10">
-               <div className="flex items-center gap-3">
-                 {/* Back button on mobile */}
-                 <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="md:hidden -ml-2 rounded-full"
-                    onClick={() => setSelectedConversation(null)}
-                 >
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><g><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"></path></g></svg>
-                 </Button>
+      {/* Main Thread View */}
+      <div className={`flex-1 flex flex-col ${activeChat ? 'flex' : 'hidden md:flex'}`}>
+        {/* Thread Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10">
+            <div className="flex items-center gap-3">
+              {/* Back button on mobile */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="md:hidden -ml-2 rounded-full"
+                // onClick={() => setActiveChat(null)}  // Removed to avoid null state bug on mobile for now
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><g><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"></path></g></svg>
+              </Button>
+              
+              {activeChat.type === 'global' ? (
                  <div className="flex flex-col">
-                   <span className="font-bold text-[17px] text-foreground">{currentConversation.user.name}</span>
-                   <span className="text-[13px] text-muted-foreground">@{currentConversation.user.handle}</span>
-                 </div>
-               </div>
-               <Button variant="ghost" size="icon" className="rounded-full text-foreground hover:bg-card">
-                 <MoreHorizontal className="w-5 h-5" />
-               </Button>
+                  <span className="font-bold text-[17px] text-foreground">Global Chat</span>
+                  <span className="text-[13px] text-muted-foreground">Anyone can join</span>
+                </div>
+              ) : activeChat.type === 'new_private' ? (
+                <div className="flex flex-col">
+                  <span className="font-bold text-[17px] text-foreground">{activeChat.user.displayName || activeChat.user.username}</span>
+                  <span className="text-[13px] text-muted-foreground">@{activeChat.user.username}</span>
+                </div>
+              ) : currentPrivateConversation ? (
+                <div className="flex flex-col">
+                  <span className="font-bold text-[17px] text-foreground">{currentPrivateConversation.peer.displayName || currentPrivateConversation.peer.username}</span>
+                  <span className="text-[13px] text-muted-foreground">@{currentPrivateConversation.peer.username}</span>
+                </div>
+              ) : <div />}
             </div>
+            
+            <Button variant="ghost" size="icon" className="rounded-full text-foreground hover:bg-card">
+              <MoreHorizontal className="w-5 h-5" />
+            </Button>
+        </div>
 
-            {/* Chat History (Mock) */}
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-               {/* Welcome Message */}
-               <div className="flex flex-col items-center justify-center my-8 text-center">
-                  <Avatar className="w-16 h-16 mb-2">
-                    <AvatarImage src={currentConversation.user.avatar} />
-                    <AvatarFallback>{currentConversation.user.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <h2 className="font-bold text-lg text-foreground">{currentConversation.user.name}</h2>
-                  <p className="text-muted-foreground">@{currentConversation.user.handle}</p>
-                  <p className="text-muted-foreground mt-2 text-sm">Joined January 2026 • 20 Followers</p>
-               </div>
-               
-               {/* Inbound Message */}
-               <div className="self-start max-w-[70%] bg-card text-foreground px-4 py-3 rounded-t-2xl rounded-r-2xl rounded-bl-none text-[15px] border border-border">
-                 {currentConversation.lastMessage}
-               </div>
+        {/* Thread Messages */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          {isLoadingMessages && activeChat.type !== 'new_private' && <div className="text-muted-foreground text-center">Loading messages...</div>}
+          {(!isLoadingMessages || activeChat.type === 'new_private') && messagesData.length === 0 && (
+            <div className="text-muted-foreground text-center mt-10">Start the conversation.</div>
+          )}
+          {activeChat.type !== 'new_private' && messagesData.map((message) => {
+            const isMine = isLoggedIn && message.sender.id === user?.id;
+            return (
+              <div key={message.id} className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMine ? 'self-end items-end' : 'self-start items-start'}`}>
+                {/* For Global Room, show sender info if not me */}
+                {!isMine && activeChat.type === 'global' && (
+                  <div className="text-[13px] font-bold text-foreground mb-1 ml-1 flex items-center gap-2">
+                    <Avatar className="w-5 h-5">
+                      <AvatarImage src={message.sender.avatarUrl ?? undefined} />
+                      <AvatarFallback>{(message.sender.displayName || message.sender.username)[0]}</AvatarFallback>
+                    </Avatar>
+                    <span>{message.sender.displayName || message.sender.username}</span>
+                    <span className="font-normal text-muted-foreground">@{message.sender.username}</span>
+                  </div>
+                )}
+                
+                <div
+                  className={`px-4 py-3 rounded-2xl text-[15px] border ${
+                    isMine
+                      ? 'bg-primary text-primary-foreground border-primary rounded-br-none'
+                      : 'bg-card text-foreground border-border rounded-bl-none'
+                  }`}
+                >
+                  {message.content}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-1 px-1">
+                  {formatRelativeTime(message.createdAt)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-               {/* Timestamp */}
-               <div className="self-center text-muted-foreground text-xs">
-                 {currentConversation.timestamp} ago
-               </div>
-            </div>
-
-            {/* Input Area */}
-            <div className="p-3 border-t border-border">
-              <div className="bg-card rounded-2xl flex items-center px-2 py-1">
-                 <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10 rounded-full w-9 h-9">
-                    <ImageIcon className="w-5 h-5" />
-                 </Button>
-                 <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10 rounded-full w-9 h-9">
-                    <Smile className="w-5 h-5" />
-                 </Button>
-                 <Input 
-                    placeholder="Start a new message" 
-                    className="flex-1 border-none bg-transparent focus-visible:ring-0 text-foreground placeholder-muted-foreground text-[15px]" 
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                 />
-                 <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={`rounded-full w-9 h-9 transition-colors ${messageInput.trim() ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground cursor-default hover:bg-transparent'}`}
-                    onClick={handleSendMessage}
-                    disabled={!messageInput.trim()}
-                 >
-                    <Send className="w-5 h-5" />
-                 </Button>
+        {/* Thread Input */}
+        <div className="p-3 border-t border-border bg-background">
+          {!isLoggedIn ? (
+            <div className="bg-muted rounded-2xl p-4 text-center">
+              <p className="text-foreground font-semibold mb-2">Join the conversation</p>
+              <p className="text-muted-foreground text-sm mb-4">Log in to send messages in the global chat.</p>
+              <div className="flex justify-center gap-2">
+                <Button variant="outline" className="rounded-full font-bold px-6">Log in</Button>
+                <Button className="rounded-full font-bold px-6">Sign up</Button>
               </div>
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full">
-            <h2 className="text-3xl font-bold text-foreground mb-2">Select a message</h2>
-            <p className="text-muted-foreground max-w-[350px]">Choose from your existing conversations, start a new one, or just keep swimming.</p>
-            <Button className="mt-6 rounded-full bg-primary hover:bg-primary/90 text-foreground font-bold px-8 py-6 text-lg">
-               New message
-            </Button>
-          </div>
-        )}
+          ) : (
+             <div className="bg-card rounded-2xl flex items-center px-2 py-1">
+                <Input 
+                  placeholder="Start a new message" 
+                  className="flex-1 border-none bg-transparent focus-visible:ring-0 text-foreground placeholder-muted-foreground text-[15px]" 
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                  disabled={sendGlobalMutation.isPending || sendDMMutation.isPending}
+                />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={`rounded-full w-9 h-9 transition-colors ${messageInput.trim() ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground cursor-default hover:bg-transparent'}`}
+                  onClick={handleSendMessage}
+                  disabled={!messageInput.trim() || sendGlobalMutation.isPending || sendDMMutation.isPending}
+                >
+                  <Send className="w-5 h-5" />
+                </Button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

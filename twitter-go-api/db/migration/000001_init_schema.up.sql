@@ -104,3 +104,38 @@ CREATE TABLE notifications (
 
 CREATE INDEX idx_notifications_recipient ON notifications(recipient_id, created_at DESC);
 CREATE INDEX idx_notifications_unread ON notifications(recipient_id) WHERE is_read = FALSE;
+
+CREATE TABLE conversations (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE conversation_participants (
+    conversation_id BIGINT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (conversation_id, user_id)
+);
+
+CREATE INDEX idx_conversation_participants_user ON conversation_participants(user_id, conversation_id);
+
+CREATE TABLE direct_messages (
+    id BIGSERIAL PRIMARY KEY,
+    conversation_id BIGINT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content VARCHAR(2000) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_direct_messages_conversation_created ON direct_messages(conversation_id, created_at DESC, id DESC);
+
+CREATE TABLE public_room_messages (
+    id BIGSERIAL PRIMARY KEY,
+    room_key VARCHAR(64) NOT NULL,
+    sender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content VARCHAR(2000) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_public_room_messages_room_created ON public_room_messages(room_key, created_at DESC, id DESC);

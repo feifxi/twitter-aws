@@ -18,6 +18,7 @@ func (server *Server) registerDomainRoutes(api *gin.RouterGroup) {
 	server.registerSearchRoutes(api, optionalAuth)
 	server.registerDiscoveryRoutes(api, optionalAuth)
 	server.registerNotificationRoutes(api, requiredAuth)
+	server.registerMessageRoutes(api, optionalAuth, requiredAuth, strictWriteLimiter)
 }
 
 func (server *Server) registerAuthRoutes(api *gin.RouterGroup, optionalAuth, requiredAuth, strictAuthLimiter gin.HandlerFunc) {
@@ -94,4 +95,18 @@ func (server *Server) registerNotificationRoutes(api *gin.RouterGroup, requiredA
 	notificationsPrivate.GET("/stream", server.streamNotifications)
 	notificationsPrivate.GET("/unread-count", server.getUnreadNotificationCount)
 	notificationsPrivate.POST("/mark-read", server.markNotificationRead)
+}
+
+func (server *Server) registerMessageRoutes(api *gin.RouterGroup, optionalAuth, requiredAuth, strictWriteLimiter gin.HandlerFunc) {
+	messagesPublic := api.Group("/messages")
+	messagesPublic.GET("/ws", server.streamMessagesWS)
+	messagesPublic.GET("/public/:room/messages", optionalAuth, server.listPublicRoomMessages)
+
+	messagesPrivate := api.Group("/messages")
+	messagesPrivate.Use(requiredAuth)
+	messagesPrivate.GET("/conversations", server.listConversations)
+	messagesPrivate.GET("/conversations/:id/messages", server.listConversationMessages)
+	messagesPrivate.POST("/conversations/:id/messages", strictWriteLimiter, server.sendMessageToConversation)
+	messagesPrivate.POST("/users/:id/messages", strictWriteLimiter, server.sendMessageToUser)
+	messagesPrivate.POST("/public/:room/messages", strictWriteLimiter, server.sendPublicRoomMessage)
 }

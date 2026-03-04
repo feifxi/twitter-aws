@@ -69,3 +69,26 @@ type UserItem struct {
 	UpdatedAt      time.Time
 	IsFollowing    bool
 }
+
+type MessageItem struct {
+	ID             int64
+	ConversationID int64
+	Sender         UserItem
+	Content        string
+	CreatedAt      time.Time
+}
+
+type PublicRoomMessageItem struct {
+	ID        int64
+	RoomKey   string
+	Sender    UserItem
+	Content   string
+	CreatedAt time.Time
+}
+
+type ConversationItem struct {
+	ID          int64
+	Peer        UserItem
+	LastMessage MessageItem
+	UpdatedAt   time.Time
+}

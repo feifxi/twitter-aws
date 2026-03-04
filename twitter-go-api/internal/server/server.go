@@ -29,10 +29,14 @@ type Server struct {
 	searchUC    usecase.SearchService
 	discoveryUC usecase.DiscoveryService
 	notifyUC    usecase.NotificationService
+	messageUC   usecase.MessageService
 	router      *gin.Engine
 	redis       *redis.Client
 	sseClients  map[int64][]*sseClient
 	sseMu       sync.RWMutex
+	wsClients   map[int64]map[*chatWSClient]struct{}
+	wsPublic    map[*chatWSClient]struct{}
+	wsMu        sync.RWMutex
 }
 
 type idURIRequest struct {
@@ -56,6 +60,8 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 		tokenMaker: tokenMaker,
 		redis:      redisClient,
 		sseClients: make(map[int64][]*sseClient),
+		wsClients:  make(map[int64]map[*chatWSClient]struct{}),
+		wsPublic:   make(map[*chatWSClient]struct{}),
 	}
 	services := usecase.NewServices(config, store, tokenMaker, storageService, server.publishNotification)
 	server.authUC = services.Auth
@@ -65,6 +71,7 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 	server.searchUC = services.Search
 	server.discoveryUC = services.Discovery
 	server.notifyUC = services.Notification
+	server.messageUC = services.Message
 
 	server.setupRouter()
 

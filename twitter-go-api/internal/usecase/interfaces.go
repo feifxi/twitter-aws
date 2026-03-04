@@ -60,6 +60,15 @@ type NotificationService interface {
 	HydrateNotification(ctx context.Context, notification db.Notification) (NotificationItem, error)
 }
 
+type MessageService interface {
+	ListConversations(ctx context.Context, userID int64, page, size int32) ([]ConversationItem, error)
+	ListMessages(ctx context.Context, userID, conversationID int64, page, size int32) ([]MessageItem, error)
+	SendMessageToUser(ctx context.Context, senderID, recipientID int64, content string) (MessageItem, []int64, error)
+	SendMessageToConversation(ctx context.Context, senderID, conversationID int64, content string) (MessageItem, []int64, error)
+	ListPublicRoomMessages(ctx context.Context, roomKey string, page, size int32, viewerID *int64) ([]PublicRoomMessageItem, error)
+	SendPublicRoomMessage(ctx context.Context, senderID int64, roomKey, content string) (PublicRoomMessageItem, error)
+}
+
 type AuthUsecase struct {
 	config     config.Config
 	store      db.Store
@@ -94,6 +103,10 @@ type NotificationUsecase struct {
 	store db.Store
 }
 
+type MessageUsecase struct {
+	store db.Store
+}
+
 type ServiceSet struct {
 	Auth         AuthService
 	User         UserService
@@ -102,6 +115,7 @@ type ServiceSet struct {
 	Search       SearchService
 	Discovery    DiscoveryService
 	Notification NotificationService
+	Message      MessageService
 }
 
 func NewServices(cfg config.Config, store db.Store, tokenMaker token.Maker, storage service.StorageService, publishNotification func(db.Notification)) ServiceSet {
@@ -125,6 +139,7 @@ func NewServices(cfg config.Config, store db.Store, tokenMaker token.Maker, stor
 		Search:       &SearchUsecase{store: store},
 		Discovery:    &DiscoveryUsecase{store: store},
 		Notification: &NotificationUsecase{store: store},
+		Message:      &MessageUsecase{store: store},
 	}
 }
 
@@ -136,4 +151,5 @@ var (
 	_ SearchService       = (*SearchUsecase)(nil)
 	_ DiscoveryService    = (*DiscoveryUsecase)(nil)
 	_ NotificationService = (*NotificationUsecase)(nil)
+	_ MessageService      = (*MessageUsecase)(nil)
 )
