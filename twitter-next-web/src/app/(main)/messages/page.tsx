@@ -25,6 +25,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -90,6 +91,7 @@ export default function MessagesPage() {
   const prevActiveChatRef = useRef<string>('');
   const initialLoadRef = useRef<Record<string, boolean>>({});
   const preventScrollFetchRef = useRef<boolean>(true);
+  const messageInputRef = useRef<HTMLInputElement>(null);
   
   const { data: searchResults, isLoading: isSearchLoading } = useQuery({
     queryKey: ['users', 'search', debouncedSearch],
@@ -266,9 +268,10 @@ export default function MessagesPage() {
         setActiveChat({ type: 'private', id: msg.conversationId });
       }
       setMessageInput('');
-      // Scroll to bottom after sending
+      // Scroll to bottom after sending and keep focus on input
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messageInputRef.current?.focus();
       }, 100);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to send message');
@@ -294,6 +297,9 @@ export default function MessagesPage() {
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>New message</DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Search for a user to start a new direct message conversation.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="flex items-center space-x-2 border-b border-border pb-4">
                     <Search className="w-4 h-4 text-muted-foreground" />
@@ -525,6 +531,7 @@ export default function MessagesPage() {
           ) : (
              <div className="bg-card rounded-2xl flex items-center px-2 py-1">
                 <Input 
+                  ref={messageInputRef}
                   placeholder="Start a new message" 
                   className="flex-1 border-none bg-transparent focus-visible:ring-0 text-foreground placeholder-muted-foreground text-[15px]" 
                   value={messageInput}
