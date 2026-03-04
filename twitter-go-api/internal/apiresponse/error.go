@@ -6,7 +6,8 @@ type FieldError struct {
 }
 
 type Error struct {
-	Code    string       `json:"code"`
-	Message string       `json:"message"`
-	Details []FieldError `json:"details,omitempty"`
+	Code      string       `json:"code"`
+	Message   string       `json:"message"`
+	RequestID string       `json:"requestId,omitempty"`
+	Details   []FieldError `json:"details,omitempty"`
 }

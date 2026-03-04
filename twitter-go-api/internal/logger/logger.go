@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/chanombude/twitter-go-api/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -28,6 +29,11 @@ func GinMiddleware() gin.HandlerFunc {
 		start := time.Now()
 		path := ctx.Request.URL.Path
 		raw := ctx.Request.URL.RawQuery
+		route := ctx.FullPath()
+		if route == "" {
+			route = path
+		}
+		requestID := middleware.GetRequestID(ctx)
 
 		ctx.Next()
 
@@ -39,6 +45,7 @@ func GinMiddleware() gin.HandlerFunc {
 		statusCode := ctx.Writer.Status()
 		clientIP := ctx.ClientIP()
 		method := ctx.Request.Method
+		userAgent := ctx.Request.UserAgent()
 		errorMessage := ctx.Errors.ByType(gin.ErrorTypePrivate).String()
 		bodySize := ctx.Writer.Size()
 
@@ -51,7 +58,10 @@ func GinMiddleware() gin.HandlerFunc {
 			Int("status", statusCode).
 			Str("method", method).
 			Str("path", path).
+			Str("route", route).
+			Str("request_id", requestID).
 			Str("ip", clientIP).
+			Str("user_agent", userAgent).
 			Dur("duration", duration).
 			Int("body_size", bodySize).
 			Str("error", errorMessage).

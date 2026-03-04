@@ -10,6 +10,7 @@ import (
 
 	"github.com/chanombude/twitter-go-api/internal/apiresponse"
 	"github.com/chanombude/twitter-go-api/internal/apperr"
+	"github.com/chanombude/twitter-go-api/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -41,6 +42,8 @@ func writeError(ctx *gin.Context, err error) {
 		return
 	}
 
+	requestID := middleware.GetRequestID(ctx)
+
 	var validationErrs validator.ValidationErrors
 	if errors.As(err, &validationErrs) {
 		out := make([]apiresponse.FieldError, len(validationErrs))
@@ -51,17 +54,19 @@ func writeError(ctx *gin.Context, err error) {
 			}
 		}
 		ctx.JSON(http.StatusBadRequest, apiresponse.Error{
-			Code:    "VALIDATION_ERROR",
-			Message: "invalid request payload",
-			Details: out,
+			Code:      "VALIDATION_ERROR",
+			Message:   "invalid request payload",
+			RequestID: requestID,
+			Details:   out,
 		})
 		return
 	}
 	var numErr *strconv.NumError
 	if errors.As(err, &numErr) {
 		response := apiresponse.Error{
-			Code:    "VALIDATION_ERROR",
-			Message: "invalid request payload",
+			Code:      "VALIDATION_ERROR",
+			Message:   "invalid request payload",
+			RequestID: requestID,
 		}
 		if field, msg := inferNumericFieldError(ctx); field != "" {
 			response.Details = []apiresponse.FieldError{{Field: field, Message: msg}}
@@ -127,10 +132,11 @@ func writeError(ctx *gin.Context, err error) {
 		zlog.Error().Err(err).
 			Str("method", ctx.Request.Method).
 			Str("path", ctx.FullPath()).
+			Str("request_id", requestID).
 			Msg("Internal server error")
 	}
 
-	ctx.JSON(status, apiresponse.Error{Code: code, Message: message})
+	ctx.JSON(status, apiresponse.Error{Code: code, Message: message, RequestID: requestID})
 }
 
 func defaultMessage(in, fallback string) string {
@@ -142,8 +148,9 @@ func defaultMessage(in, fallback string) string {
 
 func writeValidationError(ctx *gin.Context, field, message string) {
 	ctx.JSON(http.StatusBadRequest, apiresponse.Error{
-		Code:    "VALIDATION_ERROR",
-		Message: "invalid request payload",
+		Code:      "VALIDATION_ERROR",
+		Message:   "invalid request payload",
+		RequestID: middleware.GetRequestID(ctx),
 		Details: []apiresponse.FieldError{
 			{Field: field, Message: message},
 		},

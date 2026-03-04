@@ -16,20 +16,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { XLogo } from '@/components/XLogo';
 import { ComposeTweetModal } from '@/components/ComposeTweetModal';
-import { useUnreadCount } from '@/hooks/useNotifications';
-import { useNotificationSSE } from '@/hooks/useNotificationSSE';
 import { useUIStore } from '@/store/useUIStore';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
-export function AppNav() {
+type AppNavProps = {
+  unreadCount?: number;
+};
+
+export function AppNav({ unreadCount = 0 }: AppNavProps) {
   const pathname = usePathname();
   const { user, isLoggedIn, logout } = useAuth();
   const [showCompose, setShowCompose] = useState(false);
-  const { data: unreadCount } = useUnreadCount();
   const openSignInModal = useUIStore((s) => s.openSignInModal);
-
-  // Mount SSE for real-time notifications
-  useNotificationSSE();
 
   const NAV_ITEMS = [
     { label: 'Home', icon: Home, href: '/' },
@@ -77,7 +75,7 @@ export function AppNav() {
                     />
                     <div className="relative hidden xl:block cursor-pointer">
                         <span className="text-[20px] mr-4 leading-6">{item.label}</span>
-                         {item.label === 'Notifications' && (unreadCount ?? 0) > 0 && (
+                         {item.label === 'Notifications' && unreadCount > 0 && (
                             <div className="absolute -top-1 -right-1 xl:top-0 xl:-right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center text-[10px] text-foreground font-bold">
                                 {unreadCount}
                             </div>
@@ -138,7 +136,7 @@ export function AppNav() {
                 />
                 <div className="relative">
                     <span className="text-[20px] mr-4 leading-6 hidden xl:block">{item.label}</span>
-                    {item.label === 'Notifications' && (unreadCount ?? 0) > 0 && (
+                    {item.label === 'Notifications' && unreadCount > 0 && (
                         <div className="absolute -top-1 -right-1 xl:top-0 xl:-right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center text-[10px] text-foreground font-bold">
                             {unreadCount}
                         </div>

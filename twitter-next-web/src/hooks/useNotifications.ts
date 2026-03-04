@@ -34,6 +34,9 @@ export function useUnreadCount() {
             return data;
         },
         refetchInterval: 300000, // Poll every 5 minutes as fallback, rely on SSE
+        staleTime: 30000,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
         enabled: !!accessToken,
     });
 }

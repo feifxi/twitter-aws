@@ -5,6 +5,8 @@ import { Sidebar } from '@/components/Sidebar';
 import { MobileNav } from '@/components/MobileNav';
 
 import { usePathname } from 'next/navigation';
+import { useUnreadCount } from '@/hooks/useNotifications';
+import { useNotificationSSE } from '@/hooks/useNotificationSSE';
 
 export default function MainLayout({
   children,
@@ -15,6 +17,10 @@ export default function MainLayout({
   const isMessagesPage = pathname?.startsWith('/messages');
   const isChanombotPage = pathname?.startsWith('/chanombot');
   const isWideLayout = isMessagesPage || isChanombotPage;
+  const { data: unreadCount } = useUnreadCount();
+
+  // Mount SSE once at layout scope to avoid duplicated streams/refetches.
+  useNotificationSSE();
 
   return (
     <div
@@ -25,7 +31,7 @@ export default function MainLayout({
       <div className={`flex justify-center flex-1 min-w-0 ${isWideLayout ? 'max-w-[1500px]' : 'max-w-[1280px]'}`}>
         {/* Left Sidebar */}
         <aside className="hidden sm:flex w-[68px] xl:w-[275px] shrink-0 justify-end">
-          <AppNav />
+          <AppNav unreadCount={unreadCount ?? 0} />
         </aside>
         {/* Main Feed */}
         <main className={`w-full border-x border-border min-h-screen pb-[60px] sm:pb-0 ${isWideLayout ? 'max-w-[1000px] flex-1' : 'max-w-[600px]'}`}>
@@ -38,7 +44,7 @@ export default function MainLayout({
           </aside>
         )}
       </div>
-      <MobileNav />
+      <MobileNav unreadCount={unreadCount ?? 0} />
     </div>
   );
 }

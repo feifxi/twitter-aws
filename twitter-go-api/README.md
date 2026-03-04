@@ -29,6 +29,12 @@ Primary backend API for this project.
   - max size
   - extension allowlist
   - server-side detected MIME type
+- Request correlation:
+  - every response includes `X-Request-ID`
+  - error responses include `requestId` for log correlation
+- Health endpoints:
+  - `GET /healthz` (liveness)
+  - `GET /readyz` (readiness: DB/Redis dependency check)
 
 See API contract details:
 - `docs/api-contract.md`
@@ -67,6 +73,18 @@ Run all tests:
 ```bash
 go test ./...
 ```
+
+## Production Operations Baseline
+
+For Azure Container Apps:
+- Liveness probe path: `/healthz`
+- Readiness probe path: `/readyz`
+- Health endpoints are intentionally outside API rate limiting
+
+Monitoring baseline:
+- Track HTTP 5xx rate, p95 latency, and restart count
+- Create alert rules for sustained 5xx spikes and failing readiness probes
+- Use `requestId` from API error response to correlate app logs for incident triage
 
 Integration test note:
 - `internal/db/store_integration_test.go` uses `TEST_DATABASE_URL`

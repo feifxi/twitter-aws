@@ -24,6 +24,7 @@ func (server *Server) setupRouter() {
 	if server.config.MaxMultipartMemoryBytes > 0 {
 		router.MaxMultipartMemory = server.config.MaxMultipartMemoryBytes
 	}
+	router.Use(middleware.RequestID())
 	router.Use(logger.GinMiddleware())
 	router.Use(gin.Recovery())
 

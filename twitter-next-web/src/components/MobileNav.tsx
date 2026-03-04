@@ -8,7 +8,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ComposeTweetModal } from '@/components/ComposeTweetModal';
-import { useUnreadCount } from '@/hooks/useNotifications';
 import { useUIStore } from '@/store/useUIStore';
 import {
   DropdownMenu,
@@ -17,11 +16,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export function MobileNav() {
+type MobileNavProps = {
+  unreadCount?: number;
+};
+
+export function MobileNav({ unreadCount = 0 }: MobileNavProps) {
   const pathname = usePathname();
   const { user, isLoggedIn, logout } = useAuth();
   const [showCompose, setShowCompose] = useState(false);
-  const { data: unreadCount } = useUnreadCount();
   const openSignInModal = useUIStore((s) => s.openSignInModal);
 
   const NAV_ITEMS = [
@@ -62,7 +64,7 @@ export function MobileNav() {
                 className="p-2 relative flex items-center justify-center cursor-pointer"
               >
                 <Icon className={`w-6 h-6 ${isActive ? 'fill-current text-foreground' : 'text-muted-foreground'}`} strokeWidth={isActive ? 2.5 : 2} />
-                {item.label === 'Notifications' && (unreadCount ?? 0) > 0 && (
+                {item.label === 'Notifications' && unreadCount > 0 && (
                   <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
                 )}
               </button>
@@ -76,7 +78,7 @@ export function MobileNav() {
               className="p-2 relative flex items-center justify-center cursor-pointer"
             >
               <Icon className={`w-6 h-6 ${isActive ? 'fill-current text-foreground' : 'text-muted-foreground'}`} strokeWidth={isActive ? 2.5 : 2} />
-              {item.label === 'Notifications' && (unreadCount ?? 0) > 0 && (
+              {item.label === 'Notifications' && unreadCount > 0 && (
                 <div className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
               )}
             </Link>

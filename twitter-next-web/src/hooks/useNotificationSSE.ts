@@ -11,6 +11,7 @@ export function useNotificationSSE() {
     const { accessToken } = useAuthStore();
     const eventSourceRef = useRef<EventSourcePolyfill | null>(null);
     const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const openedOnceRef = useRef(false);
 
     useEffect(() => {
         if (!accessToken) {
@@ -52,8 +53,13 @@ export function useNotificationSSE() {
         eventSourceRef.current = es;
 
         es.onopen = () => {
-            // Ensure state is re-synced on (re)connect.
-            scheduleRefresh();
+            // Avoid extra unread-count fetch on first connect.
+            // Only re-sync when this is a reconnect.
+            if (openedOnceRef.current) {
+                scheduleRefresh();
+                return;
+            }
+            openedOnceRef.current = true;
         };
 
         const handleNotification = (event: { data: string }) => {
