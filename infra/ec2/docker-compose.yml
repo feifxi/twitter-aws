@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/chanombude/twitter-aws-go-api:latest
+    container_name: twitter-aws-go-api
+    ports:
+      - "80:8080"
+    env_file:
+      - .env
+    restart: unless-stopped
+    
+    # ป้องกัน Log กิน Disk EC2 เต็ม
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

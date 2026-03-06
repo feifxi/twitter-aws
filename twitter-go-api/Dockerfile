@@ -1,37 +1,42 @@
-# Build stage
-FROM golang:1.24.4-alpine AS builder
+# ==========================================
+# Stage 1: Builder
+# ==========================================
+FROM golang:1.24-alpine AS builder
 
-# Set the Current Working Directory inside the container
 WORKDIR /app
 
-# Copy go mod and sum files
-COPY twitter-go-api/go.mod twitter-go-api/go.sum ./
+# ติดตั้งแพ็กเกจที่จำเป็นสำหรับระบบและ SSL
+RUN apk update && apk add --no-cache git tzdata ca-certificates
 
-# Download all dependencies
+# Copy เฉพาะไฟล์จัดการ Dependencies ก่อนเพื่อใช้ประโยชน์จาก Docker Cache
+COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the source from the current directory to the Working Directory inside the container
-COPY twitter-go-api/ .
+# Copy Source Code ทั้งหมดในโฟลเดอร์ twitter-go-api
+COPY . .
 
-# Build the Go app
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
+# Build Go Binary แบบรีดไขมัน (ตัด Debug info ทิ้ง)
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main ./cmd/api
 
-# Run stage
-FROM alpine:latest  
-
-# Add required CA certificates for HTTPS calls
-RUN apk --no-cache add ca-certificates tzdata
+# ==========================================
+# Stage 2: Production (Minimal & Secure)
+# ==========================================
+FROM alpine:latest
 
 WORKDIR /app
 
-# Copy the Pre-built binary file from the previous stage
+# ก๊อปปี้ SSL Certs และ Timezone มาจาก Builder
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# ก๊อปปี้ Binary และไฟล์ Migration
 COPY --from=builder /app/main .
+COPY --from=builder /app/db/migration ./db/migration
 
-# Copy database migrations
-COPY twitter-go-api/db/migration ./db/migration
+# 🛡️ SECURITY: สร้าง User ธรรมดาเพื่อรันแอป (ไม่ใช้ root)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 
-# Expose port 8080 to the outside world
 EXPOSE 8080
 
-# Command to run the executable
-CMD ["/app/main"]
+CMD ["./main"]

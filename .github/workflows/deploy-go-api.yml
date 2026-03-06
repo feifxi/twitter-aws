@@ -1,29 +1,29 @@
-name: Deploy Go API
+name: Deploy Go API to EC2
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
-    branches: 
-      [ main ]
+    branches: [ "main" ]
     paths:
-    - 'twitter-go-api/**'
-    - '.github/workflows/deploy-go-api.yml'
+      - 'twitter-go-api/**'
+      - '.github/workflows/deploy-go-api.yml'
+  workflow_dispatch:
 
-  # Allow manual trigger 
-  workflow_dispatch:      
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-go-api
 
 jobs:
-  build-and-deploy:
+  build-test-deploy:
     runs-on: ubuntu-latest
-    permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout to the branch
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      # 1. รัน Test
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -33,21 +33,38 @@ jobs:
         working-directory: twitter-go-api
         run: go test ./...
 
-      - name: Azure Login
-        uses: azure/login@v2
+      # 2. Build & Push Image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          client-id: ${{ secrets.CACHNTWTGOAPIDEV_AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.CACHNTWTGOAPIDEV_AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.CACHNTWTGOAPIDEV_AZURE_SUBSCRIPTION_ID }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push container image to registry
-        uses: azure/container-apps-deploy-action@v2
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: twitter-go-api/Dockerfile
-          registryUrl: crchntwtdevsea001.azurecr.io
-          registryUsername: ${{ secrets.CACHNTWTGOAPIDEV_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.CACHNTWTGOAPIDEV_REGISTRY_PASSWORD }}
-          containerAppName: ca-chntwt-go-api-dev
-          resourceGroup: rg-chntwt-dev-sea
-          imageToBuild: crchntwtdevsea001.azurecr.io/ca-chntwt-go-api-dev:${{ github.sha }}
+          context: ./twitter-go-api
+          file: ./twitter-go-api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      # 3. Deploy ไปที่ EC2
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            cd /home/ec2-user/app
+            
+            # ดึง Image ตัวใหม่ล่าสุดมาเตรียมไว้ (จาก GHCR)
+            docker compose pull
+            
+            # สั่งรัน Container ใหม่ พร้อมกวาดล้าง Container ผี
+            docker compose up -d --remove-orphans
+            
+            # ลบ Image เก่าทิ้ง
+            docker image prune -f

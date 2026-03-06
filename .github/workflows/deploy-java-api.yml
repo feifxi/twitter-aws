@@ -48,6 +48,6 @@ jobs:
           registryUrl: crchntwtdevsea001.azurecr.io
           registryUsername: ${{ secrets.CACHNTWTAPIDEV_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.CACHNTWTAPIDEV_REGISTRY_PASSWORD }}
-          containerAppName: ca-chntwt-api-dev
+          containerAppName: ca-chntwt-springboot-dev
           resourceGroup: rg-chntwt-dev-sea
-          imageToBuild: crchntwtdevsea001.azurecr.io/ca-chntwt-api-dev:${{ github.sha }}
+          imageToBuild: crchntwtdevsea001.azurecr.io/ca-chntwt-springboot-dev:${{ github.sha }}
