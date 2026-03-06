@@ -1,4 +1,4 @@
-name: Deploy Java API
+name: Deploy Spring Boot API to Azure Container Apps
 
 on:
   # push:
