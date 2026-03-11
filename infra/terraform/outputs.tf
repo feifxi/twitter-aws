@@ -33,3 +33,13 @@ output "api_gateway_url" {
   description = "API Gateway invoke URL"
   value       = aws_apigatewayv2_api.this.api_endpoint
 }
+
+output "amplify_app_url" {
+  description = "Amplify Frontend URL"
+  value       = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.this.default_domain}"
+}
+
+output "allowed_frontend_origins" {
+  description = "Aggregated list of allowed frontend origins"
+  value       = local.frontend_origins
+}

@@ -2,9 +2,8 @@
 
 Full-stack Twitter/X clone with a Go-first backend and Next.js frontend.
 
-The Go API is the primary backend in active development:
-- `twitter-go-api` (primary)
 - `twitter-next-web` (frontend)
+- `twitter-go-api` (backend)
 - `twitter-java-api` (legacy/alternative backend)
 - `infra` (Terraform IaC)
 

@@ -76,3 +76,23 @@ variable "frontend_url" {
   type        = string
   default     = "http://localhost:3000"
 }
+
+# ── GitHub / Amplify ──────────────────────────────────
+
+variable "gh_repo_url" {
+  description = "GitHub repository URL for Amplify"
+  type        = string
+  default     = "https://github.com/feifxi/twitter-aws"
+}
+
+variable "gh_branch" {
+  description = "GitHub branch to deploy"
+  type        = string
+  default     = "main"
+}
+
+variable "gh_token" {
+  description = "GitHub Personal Access Token (PAT)"
+  type        = string
+  sensitive   = true
+}

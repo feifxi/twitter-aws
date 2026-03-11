@@ -18,4 +18,9 @@ db_password = "CHANGE_ME_TO_A_STRONG_PASSWORD"
 gateway_secret = "CHANGE_ME_TO_A_RANDOM_SECRET"
 
 # Frontend URL(s) for CORS — comma-separated
+# Note: After deployment, you should add your Amplify URL here
 frontend_url = "http://localhost:3000"
+
+# GitHub / Amplify setup
+# gh_repo_url = "https://github.com/feifxi/twitter-aws"
+gh_token    = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
