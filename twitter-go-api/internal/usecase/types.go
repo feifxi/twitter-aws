@@ -24,7 +24,6 @@ const (
 
 // MediaType constants.
 const (
-	MediaTypeNone  = "NONE"
 	MediaTypeImage = "IMAGE"
 	MediaTypeVideo = "VIDEO"
 )

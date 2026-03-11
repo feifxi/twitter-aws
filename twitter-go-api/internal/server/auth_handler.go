@@ -86,8 +86,6 @@ func (server *Server) setSessionCookies(ctx *gin.Context, accessToken, refreshTo
 		server.config.CookieSecure,
 		true,
 	)
-
-	ctx.SetSameSite(server.cookieSameSite())
 	ctx.SetCookie(
 		"refresh_token",
 		refreshToken,
@@ -117,8 +115,6 @@ func (server *Server) getMe(ctx *gin.Context) {
 func (server *Server) clearSessionCookies(ctx *gin.Context) {
 	ctx.SetSameSite(server.cookieSameSite())
 	ctx.SetCookie("access_token", "", -1, "/", server.config.CookieDomain, server.config.CookieSecure, true)
-
-	ctx.SetSameSite(server.cookieSameSite())
 	ctx.SetCookie("refresh_token", "", -1, "/api/v1/auth/refresh", server.config.CookieDomain, server.config.CookieSecure, true)
 }
 

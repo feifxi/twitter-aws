@@ -115,8 +115,7 @@ func (u *UserUsecase) UnfollowUser(ctx context.Context, followerID, targetUserID
 }
 
 func (u *UserUsecase) ListFollowers(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
-	vID := viewerID
-	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID}); err != nil {
+	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: viewerID}); err != nil {
 		return nil, err
 	}
 
@@ -124,7 +123,7 @@ func (u *UserUsecase) ListFollowers(ctx context.Context, targetUserID int64, pag
 		FollowingID: targetUserID,
 		Limit:       size,
 		Offset:      page * size,
-		ViewerID:    vID,
+		ViewerID:    viewerID,
 	})
 	if err != nil {
 		return nil, err
@@ -138,8 +137,7 @@ func (u *UserUsecase) ListFollowers(ctx context.Context, targetUserID int64, pag
 }
 
 func (u *UserUsecase) ListFollowing(ctx context.Context, targetUserID int64, page, size int32, viewerID *int64) ([]UserItem, error) {
-	vID := viewerID
-	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: vID}); err != nil {
+	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: targetUserID, ViewerID: viewerID}); err != nil {
 		return nil, err
 	}
 
@@ -147,7 +145,7 @@ func (u *UserUsecase) ListFollowing(ctx context.Context, targetUserID int64, pag
 		FollowerID: targetUserID,
 		Limit:      size,
 		Offset:     page * size,
-		ViewerID:   vID,
+		ViewerID:   viewerID,
 	})
 	if err != nil {
 		return nil, err

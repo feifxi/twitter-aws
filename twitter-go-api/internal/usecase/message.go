@@ -35,6 +35,20 @@ func normalizeRoomKey(roomKey string) (string, error) {
 	return normalized, nil
 }
 
+func (u *MessageUsecase) fetchSender(ctx context.Context, senderID int64) (UserItem, error) {
+	rows, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
+		ViewerID: &senderID,
+		UserIds:  []int64{senderID},
+	})
+	if err != nil {
+		return UserItem{}, err
+	}
+	if len(rows) == 0 {
+		return UserItem{}, apperr.Internal("sender not found", nil)
+	}
+	return newUserItemFromDB(rows[0].User, rows[0].IsFollowing), nil
+}
+
 func (u *MessageUsecase) ListConversations(ctx context.Context, userID int64, page, size int32) ([]ConversationItem, error) {
 	rows, err := u.store.ListUserConversations(ctx, db.ListUserConversationsParams{
 		UserID: userID,
@@ -238,18 +252,10 @@ func (u *MessageUsecase) SendMessageToUser(ctx context.Context, senderID, recipi
 		return MessageItem{}, nil, err
 	}
 
-	viewerID := senderID
-	senderRows, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
-		ViewerID: &viewerID,
-		UserIds:  []int64{senderID},
-	})
+	sender, err := u.fetchSender(ctx, senderID)
 	if err != nil {
 		return MessageItem{}, nil, err
 	}
-	if len(senderRows) == 0 {
-		return MessageItem{}, nil, apperr.Internal("sender not found", nil)
-	}
-	sender := newUserItemFromDB(senderRows[0].User, senderRows[0].IsFollowing)
 
 	return MessageItem{
 		ID:             created.ID,
@@ -299,18 +305,10 @@ func (u *MessageUsecase) SendMessageToConversation(ctx context.Context, senderID
 		return MessageItem{}, nil, err
 	}
 
-	viewerID := senderID
-	senderRows, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
-		ViewerID: &viewerID,
-		UserIds:  []int64{senderID},
-	})
+	sender, err := u.fetchSender(ctx, senderID)
 	if err != nil {
 		return MessageItem{}, nil, err
 	}
-	if len(senderRows) == 0 {
-		return MessageItem{}, nil, apperr.Internal("sender not found", nil)
-	}
-	sender := newUserItemFromDB(senderRows[0].User, senderRows[0].IsFollowing)
 
 	return MessageItem{
 		ID:             created.ID,
@@ -401,18 +399,10 @@ func (u *MessageUsecase) SendPublicRoomMessage(ctx context.Context, senderID int
 		return PublicRoomMessageItem{}, err
 	}
 
-	viewerID := senderID
-	senderRows, err := u.store.GetUsersByIDs(ctx, db.GetUsersByIDsParams{
-		ViewerID: &viewerID,
-		UserIds:  []int64{senderID},
-	})
+	sender, err := u.fetchSender(ctx, senderID)
 	if err != nil {
 		return PublicRoomMessageItem{}, err
 	}
-	if len(senderRows) == 0 {
-		return PublicRoomMessageItem{}, apperr.Internal("sender not found", nil)
-	}
-	sender := newUserItemFromDB(senderRows[0].User, senderRows[0].IsFollowing)
 
 	return PublicRoomMessageItem{
 		ID:        created.ID,

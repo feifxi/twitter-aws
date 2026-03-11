@@ -35,24 +35,13 @@ type userResponse struct {
 }
 
 func newUserResponse(user usecase.UserItem) userResponse {
-	var displayName, bio, avatarUrl *string
-	if user.DisplayName != nil {
-		displayName = user.DisplayName
-	}
-	if user.Bio != nil {
-		bio = user.Bio
-	}
-	if user.AvatarUrl != nil {
-		avatarUrl = user.AvatarUrl
-	}
-
 	return userResponse{
 		ID:             user.ID,
 		Username:       user.Username,
 		Email:          user.Email,
-		DisplayName:    displayName,
-		Bio:            bio,
-		AvatarUrl:      avatarUrl,
+		DisplayName:    user.DisplayName,
+		Bio:            user.Bio,
+		AvatarUrl:      user.AvatarUrl,
 		IsFollowing:    user.IsFollowing,
 		FollowersCount: user.FollowersCount,
 		FollowingCount: user.FollowingCount,
@@ -77,22 +66,6 @@ type tweetResponse struct {
 }
 
 func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
-	var content, mediaType, mediaURL *string
-	if tweet.Content != nil {
-		content = tweet.Content
-	}
-	if tweet.MediaType != nil {
-		mediaType = tweet.MediaType
-	}
-	if tweet.MediaUrl != nil {
-		mediaURL = tweet.MediaUrl
-	}
-
-	var parentID *int64
-	if tweet.ParentID != nil {
-		parentID = tweet.ParentID
-	}
-
 	var original *tweetResponse
 	if tweet.OriginalTweet != nil {
 		r := newTweetResponse(*tweet.OriginalTweet)
@@ -101,9 +74,9 @@ func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
 
 	return tweetResponse{
 		ID:              tweet.ID,
-		Content:         content,
-		MediaType:       mediaType,
-		MediaUrl:        mediaURL,
+		Content:         tweet.Content,
+		MediaType:       tweet.MediaType,
+		MediaUrl:        tweet.MediaUrl,
 		User:            newUserResponse(tweet.Author),
 		ReplyCount:      tweet.ReplyCount,
 		LikeCount:       tweet.LikeCount,
@@ -111,7 +84,7 @@ func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
 		IsLiked:         tweet.IsLiked,
 		IsRetweeted:     tweet.IsRetweeted,
 		RetweetedTweet:  original,
-		ReplyToTweetID:  parentID,
+		ReplyToTweetID:  tweet.ParentID,
 		ReplyToUsername: tweet.ParentUsername,
 		CreatedAt:       tweet.CreatedAt,
 	}
@@ -173,15 +146,10 @@ type conversationResponse struct {
 }
 
 func newNotificationResponse(item usecase.NotificationItem) notificationResponse {
-	var tweetID *int64
-	if item.TweetID != nil {
-		tweetID = item.TweetID
-	}
-
 	return notificationResponse{
 		ID:                    item.ID,
 		Actor:                 newUserResponse(item.Actor),
-		TweetID:               tweetID,
+		TweetID:               item.TweetID,
 		TweetContent:          item.TweetContent,
 		TweetMediaUrl:         item.TweetMediaUrl,
 		OriginalTweetID:       item.OriginalTweetID,

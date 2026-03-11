@@ -46,7 +46,7 @@ func main() {
 	if config.DBMaxConns > 0 {
 		poolConfig.MaxConns = config.DBMaxConns
 	}
-	if config.DBMinConns >= 0 {
+	if config.DBMinConns > 0 {
 		poolConfig.MinConns = config.DBMinConns
 	}
 	if config.DBMaxConnLifetimeMinutes > 0 {
@@ -57,6 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Cannot connect to db")
 	}
+	defer conn.Close()
 
 	runDBMigration("file://db/migration", config.DBSource)
 
@@ -116,6 +117,15 @@ func runDBMigration(migrationURL string, dbSource string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Cannot create new migrate instance")
 	}
+	defer func() {
+		sourceErr, dbErr := migration.Close()
+		if sourceErr != nil {
+			log.Warn().Err(sourceErr).Msg("Failed to close migration source")
+		}
+		if dbErr != nil {
+			log.Warn().Err(dbErr).Msg("Failed to close migration db")
+		}
+	}()
 
 	if err = migration.Up(); err != nil && err != migrate.ErrNoChange {
 		log.Fatal().Err(err).Msg("Failed to run migrate up")

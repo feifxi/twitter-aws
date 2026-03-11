@@ -103,21 +103,16 @@ func (u *NotificationUsecase) hydrateNotifications(ctx context.Context, notifica
 
 		parentIDsTemp := make(map[int64]struct{})
 		for _, raw := range rawTweets {
-			var content *string
-			if raw.Tweet.Content != nil {
-				content = raw.Tweet.Content
+			preview := tweetPreview{
+				Content: raw.Tweet.Content,
+				Media:   raw.Tweet.MediaUrl,
 			}
-			var media *string
-			if raw.Tweet.MediaUrl != nil {
-				media = raw.Tweet.MediaUrl
-			}
-			var parentId *int64
 			if raw.Tweet.ParentID != nil {
 				id := *raw.Tweet.ParentID
-				parentId = &id
+				preview.ParentID = &id
 				parentIDsTemp[id] = struct{}{}
 			}
-			tweets[raw.Tweet.ID] = tweetPreview{Content: content, Media: media, ParentID: parentId}
+			tweets[raw.Tweet.ID] = preview
 		}
 
 		var parentIDs []int64
@@ -132,17 +127,13 @@ func (u *NotificationUsecase) hydrateNotifications(ctx context.Context, notifica
 				TweetIds: parentIDs,
 				ViewerID: nil,
 			})
-			if err == nil {
-				for _, raw := range parentRaw {
-					var content *string
-					if raw.Tweet.Content != nil {
-						content = raw.Tweet.Content
-					}
-					var media *string
-					if raw.Tweet.MediaUrl != nil {
-						media = raw.Tweet.MediaUrl
-					}
-					tweets[raw.Tweet.ID] = tweetPreview{Content: content, Media: media}
+			if err != nil {
+				return nil, err
+			}
+			for _, raw := range parentRaw {
+				tweets[raw.Tweet.ID] = tweetPreview{
+					Content: raw.Tweet.Content,
+					Media:   raw.Tweet.MediaUrl,
 				}
 			}
 		}

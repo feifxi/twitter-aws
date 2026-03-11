@@ -135,10 +135,7 @@ func (server *Server) listPublicRoomMessages(ctx *gin.Context) {
 	}
 	page := offset / size
 
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 
 	items, err := server.messageUC.ListPublicRoomMessages(ctx, req.Room, page, size+1, viewerID)
 	if err != nil {

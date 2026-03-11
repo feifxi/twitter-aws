@@ -126,7 +126,7 @@ func (u *TweetUsecase) DeleteTweet(ctx context.Context, userID, tweetID int64) e
 		return err
 	}
 
-	err = u.store.ExecTxAfterCommit(ctx, func(q *db.Queries) error {
+	return u.store.ExecTxAfterCommit(ctx, func(q *db.Queries) error {
 		// Collect hashtag usage impact for the full cascade set (root tweet + replies + retweets)
 		// before deletion, because tweet_hashtags rows are removed via ON DELETE CASCADE.
 		hashtagUsage, err := q.ListHashtagUsageToDecrementForDeleteRoot(ctx, tweetID)
@@ -183,11 +183,6 @@ func (u *TweetUsecase) DeleteTweet(ctx context.Context, userID, tweetID int64) e
 			_ = u.storage.DeleteFile(cleanupCtx, *url)
 		}
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (u *TweetUsecase) GetTweet(ctx context.Context, tweetID int64, viewerID *int64) (TweetItem, error) {
