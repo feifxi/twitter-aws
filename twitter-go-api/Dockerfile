@@ -33,7 +33,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/main .
 COPY --from=builder /app/db/migration ./db/migration
 
-# 🛡️ SECURITY: สร้าง User ธรรมดาเพื่อรันแอป (ไม่ใช้ root)
+# SECURITY: สร้าง User ธรรมดาเพื่อรันแอป (ไม่ใช้ root)
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 

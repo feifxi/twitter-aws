@@ -102,3 +102,17 @@ func Withf(err error, format string, args ...any) error {
 	}
 	return fmt.Errorf(format+": %w", append(args, err)...)
 }
+
+// ErrorResponse is the standard JSON error envelope returned by HTTP handlers.
+type ErrorResponse struct {
+	Code      string       `json:"code"`
+	Message   string       `json:"message"`
+	RequestID string       `json:"requestId,omitempty"`
+	Details   []FieldError `json:"details,omitempty"`
+}
+
+// FieldError describes a single field-level validation error.
+type FieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}

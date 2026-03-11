@@ -8,18 +8,10 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
-type AvatarUpload struct {
-	Filename    string
-	ContentType string
-	Reader      interface {
-		Read(p []byte) (n int, err error)
-	}
-}
-
 type UpdateProfileInput struct {
 	Bio         *string
 	DisplayName *string
-	Avatar      *AvatarUpload
+	Avatar      *FileUpload
 }
 
 func (u *UserUsecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {

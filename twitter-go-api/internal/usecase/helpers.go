@@ -8,21 +8,12 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
-// nullViewerID builds the common sql.NullInt64 viewer pattern.
-func nullViewerID(viewerID *int64) *int64 {
-	if viewerID == nil {
-		return nil
-	}
-	v := *viewerID
-	return &v
-}
-
 var hashtagRegex = regexp.MustCompile(`(?i)(?:^|\s)#([a-z0-9_]+)`)
 
 func extractHashtags(content string) []string {
 	matches := hashtagRegex.FindAllStringSubmatch(content, -1)
 	if len(matches) == 0 {
-		return nil
+		return []string{}
 	}
 
 	seen := make(map[string]struct{})

@@ -48,8 +48,7 @@ func (u *FeedUsecase) GetFollowingFeed(ctx context.Context, userID int64, page, 
 }
 
 func (u *FeedUsecase) GetUserFeed(ctx context.Context, userID int64, page, size int32, viewerID *int64) ([]TweetItem, error) {
-	vID := nullViewerID(viewerID)
-	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: userID, ViewerID: vID}); err != nil {
+	if _, err := u.store.GetUser(ctx, db.GetUserParams{ID: userID, ViewerID: viewerID}); err != nil {
 		return nil, err
 	}
 
@@ -57,7 +56,7 @@ func (u *FeedUsecase) GetUserFeed(ctx context.Context, userID int64, page, size 
 		UserID:   userID,
 		Limit:    size,
 		Offset:   page * size,
-		ViewerID: vID,
+		ViewerID: viewerID,
 	})
 	if err != nil {
 		return nil, err

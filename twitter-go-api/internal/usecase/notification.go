@@ -2,9 +2,9 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/chanombude/twitter-go-api/internal/db"
+	"github.com/jackc/pgx/v5"
 )
 
 type NotificationItem struct {
@@ -43,7 +43,7 @@ func (u *NotificationUsecase) HydrateNotification(ctx context.Context, notificat
 		return NotificationItem{}, err
 	}
 	if len(items) == 0 {
-		return NotificationItem{}, sql.ErrNoRows
+		return NotificationItem{}, pgx.ErrNoRows
 	}
 	return items[0], nil
 }

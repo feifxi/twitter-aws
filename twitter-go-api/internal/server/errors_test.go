@@ -2,17 +2,16 @@ package server
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 
-	"github.com/chanombude/twitter-go-api/internal/apiresponse"
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -24,9 +23,9 @@ func newErrorTestContext(path string) (*gin.Context, *httptest.ResponseRecorder)
 	return ctx, w
 }
 
-func decodeErrorResponse(t *testing.T, rec *httptest.ResponseRecorder) apiresponse.Error {
+func decodeErrorResponse(t *testing.T, rec *httptest.ResponseRecorder) apperr.ErrorResponse {
 	t.Helper()
-	var out apiresponse.Error
+	var out apperr.ErrorResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("failed to decode error response: %v body=%s", err, rec.Body.String())
 	}
@@ -55,7 +54,7 @@ func TestWriteErrorMapsCoreErrorTypes(t *testing.T) {
 		},
 		{
 			name:        "not found",
-			err:         sql.ErrNoRows,
+			err:         pgx.ErrNoRows,
 			path:        "/api/v1/test",
 			wantStatus:  http.StatusNotFound,
 			wantCode:    "NOT_FOUND",

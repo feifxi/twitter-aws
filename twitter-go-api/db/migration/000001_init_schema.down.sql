@@ -1,5 +1,3 @@
--- Flyway V1: Twitter Clone Complete Schema Down Migration
-
 DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS public_room_messages CASCADE;
 DROP TABLE IF EXISTS direct_messages CASCADE;

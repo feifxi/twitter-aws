@@ -37,6 +37,7 @@ type Server struct {
 	wsClients   map[int64]map[*chatWSClient]struct{}
 	wsPublic    map[*chatWSClient]struct{}
 	wsMu        sync.RWMutex
+	done        chan struct{}
 }
 
 type idURIRequest struct {
@@ -62,6 +63,7 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 		sseClients: make(map[int64][]*sseClient),
 		wsClients:  make(map[int64]map[*chatWSClient]struct{}),
 		wsPublic:   make(map[*chatWSClient]struct{}),
+		done:       make(chan struct{}),
 	}
 	services := usecase.NewServices(config, store, tokenMaker, storageService, server.publishNotification)
 	server.authUC = services.Auth
@@ -80,6 +82,11 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 	}
 
 	return server, nil
+}
+
+// Shutdown signals background goroutines (e.g. Redis listener) to stop.
+func (server *Server) Shutdown() {
+	close(server.done)
 }
 
 func (server *Server) HTTPServer(address string) *http.Server {

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/chanombude/twitter-go-api/internal/config"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 type StorageService interface {
@@ -26,7 +26,7 @@ type AzureStorageService struct {
 func NewAzureStorageService(config config.Config) (StorageService, error) {
 	// If the connection string is just the placeholder, don't fail, but log a warning.
 	if config.AzureStorageConnString == "" || config.AzureStorageConnString == "your-azure-connection-string" {
-		log.Println("WARNING: AZURE_STORAGE_CONNECTION_STRING is not set or is using the default placeholder.")
+		log.Warn().Msg("AZURE_STORAGE_CONNECTION_STRING is not set or is using the default placeholder")
 		return &AzureStorageService{
 			client:        nil,
 			containerName: config.AzureStorageContainer,
@@ -98,7 +98,7 @@ func (s *AzureStorageService) DeleteFile(ctx context.Context, fileUrl string) er
 	_, err := s.client.DeleteBlob(ctx, s.containerName, filename, nil)
 	if err != nil {
 		// Log but don't fail the parent transaction (e.g. deleting a tweet shouldn't fail if the image is already gone)
-		log.Printf("Warning: failed to delete blob from azure: %v\n", err)
+		log.Warn().Err(err).Msg("Failed to delete blob from Azure")
 	}
 
 	return nil

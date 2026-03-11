@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	stdlog "log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +14,7 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/logger"
 	"github.com/chanombude/twitter-go-api/internal/server"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog/log"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -24,17 +25,17 @@ import (
 func main() {
 	config, err := config.LoadConfig(".")
 	if err != nil {
-		log.Fatal("cannot load config:", err)
+		stdlog.Fatal("cannot load config:", err)
 	}
 	if err := config.ValidateForRuntime(); err != nil {
-		log.Fatal("invalid runtime config:", err)
+		stdlog.Fatal("invalid runtime config:", err)
 	}
 
 	logger.InitLogger(config.Environment)
 
 	poolConfig, err := pgxpool.ParseConfig(config.DBSource)
 	if err != nil {
-		log.Fatal("cannot parse db config:", err)
+		log.Fatal().Err(err).Msg("Cannot parse db config")
 	}
 	if config.DBMaxConns > 0 {
 		poolConfig.MaxConns = config.DBMaxConns
@@ -48,7 +49,7 @@ func main() {
 
 	conn, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
-		log.Fatal("cannot connect to db:", err)
+		log.Fatal().Err(err).Msg("Cannot connect to db")
 	}
 
 	runDBMigration("file://db/migration", config.DBSource)
@@ -57,7 +58,7 @@ func main() {
 	if config.RedisAddress != "" {
 		redisOpt, err := redis.ParseURL(config.RedisAddress)
 		if err != nil {
-			log.Printf("warning: invalid REDIS_ADDRESS, starting without redis: %v", err)
+			log.Warn().Err(err).Msg("Invalid REDIS_ADDRESS, starting without Redis")
 		} else {
 			if config.RedisPassword != "" {
 				redisOpt.Password = config.RedisPassword
@@ -67,7 +68,7 @@ func main() {
 			pingErr := client.Ping(pingCtx).Err()
 			cancel()
 			if pingErr != nil {
-				log.Printf("warning: redis unavailable, starting without redis: %v", pingErr)
+				log.Warn().Err(pingErr).Msg("Redis unavailable, starting without Redis")
 				_ = client.Close()
 			} else {
 				redisClient = client
@@ -79,39 +80,40 @@ func main() {
 	store := db.NewStore(conn)
 	server, err := server.NewServer(config, store, redisClient)
 	if err != nil {
-		log.Fatal("cannot create server:", err)
+		log.Fatal().Err(err).Msg("Cannot create server")
 	}
 
 	srv := server.HTTPServer(config.HTTPServerAddress)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			log.Fatal().Err(err).Msg("HTTP listen failed")
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	log.Info().Msg("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	server.Shutdown()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		log.Fatal().Err(err).Msg("Server forced to shutdown")
 	}
 
-	log.Println("Server exiting")
+	log.Info().Msg("Server exiting")
 }
 
 func runDBMigration(migrationURL string, dbSource string) {
 	migration, err := migrate.New(migrationURL, dbSource)
 	if err != nil {
-		log.Fatal("cannot create new migrate instance:", err)
+		log.Fatal().Err(err).Msg("Cannot create new migrate instance")
 	}
 
 	if err = migration.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatal("failed to run migrate up:", err)
+		log.Fatal().Err(err).Msg("Failed to run migrate up")
 	}
 
-	log.Println("db migrated successfully")
+	log.Info().Msg("DB migrated successfully")
 }

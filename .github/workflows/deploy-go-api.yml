@@ -60,10 +60,8 @@ jobs:
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             cd /home/ec2-user/app
             
-            # ดึง Image ตัวใหม่ล่าสุดมาเตรียมไว้ (จาก GHCR)
             docker compose pull
             
-            # สั่งรัน Container ใหม่ พร้อมกวาดล้าง Container ผี
             docker compose up -d --remove-orphans
             
             # ลบ Image เก่าทิ้ง

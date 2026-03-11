@@ -11,16 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
-	// "github.com/rs/zerolog/log"
 )
 
 func (server *Server) setupRouter() {
 	configureValidationFieldNames()
 
 	router := gin.New()
-	// if err := router.SetTrustedProxies(parseTrustedProxies(server.config.TrustedProxies)); err != nil {
-	// 	log.Warn().Err(err).Msg("Failed to set trusted proxies, falling back to default proxy behavior")
-	// }
 	if server.config.MaxMultipartMemoryBytes > 0 {
 		router.MaxMultipartMemory = server.config.MaxMultipartMemoryBytes
 	}
@@ -51,7 +47,7 @@ func (server *Server) setupRouter() {
 	router.GET("/readyz", server.readyz)
 
 	api := router.Group("/api/v1")
-	api.Use(middleware.RateLimiterWithRedis(server.redis, 20, 60, "rl:default"))
+	api.Use(middleware.RateLimiterWithRedis(server.redis, 20, 60, "rl:api"))
 	server.registerDomainRoutes(api)
 
 	server.router = router
@@ -74,10 +70,6 @@ func parseAllowedOrigins(raw string) []string {
 		return nil
 	}
 	return out
-}
-
-func parseTrustedProxies(raw string) []string {
-	return parseAllowedOrigins(raw)
 }
 
 func configureValidationFieldNames() {

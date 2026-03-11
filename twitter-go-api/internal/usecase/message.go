@@ -243,8 +243,11 @@ func (u *MessageUsecase) SendMessageToUser(ctx context.Context, senderID, recipi
 		ViewerID: &viewerID,
 		UserIds:  []int64{senderID},
 	})
-	if err != nil || len(senderRows) == 0 {
+	if err != nil {
 		return MessageItem{}, nil, err
+	}
+	if len(senderRows) == 0 {
+		return MessageItem{}, nil, apperr.Internal("sender not found", nil)
 	}
 	sender := newUserItemFromDB(senderRows[0].User, senderRows[0].IsFollowing)
 
@@ -274,15 +277,20 @@ func (u *MessageUsecase) SendMessageToConversation(ctx context.Context, senderID
 		return MessageItem{}, nil, apperr.Forbidden("not allowed to send messages to this conversation")
 	}
 
-	created, err := u.store.CreateDirectMessage(ctx, db.CreateDirectMessageParams{
-		ConversationID: conversationID,
-		SenderID:       senderID,
-		Content:        normalized,
+	var created db.DirectMessage
+	err = u.store.ExecTx(ctx, func(q *db.Queries) error {
+		var createErr error
+		created, createErr = q.CreateDirectMessage(ctx, db.CreateDirectMessageParams{
+			ConversationID: conversationID,
+			SenderID:       senderID,
+			Content:        normalized,
+		})
+		if createErr != nil {
+			return createErr
+		}
+		return q.TouchConversation(ctx, conversationID)
 	})
 	if err != nil {
-		return MessageItem{}, nil, err
-	}
-	if err := u.store.TouchConversation(ctx, conversationID); err != nil {
 		return MessageItem{}, nil, err
 	}
 
@@ -296,8 +304,11 @@ func (u *MessageUsecase) SendMessageToConversation(ctx context.Context, senderID
 		ViewerID: &viewerID,
 		UserIds:  []int64{senderID},
 	})
-	if err != nil || len(senderRows) == 0 {
+	if err != nil {
 		return MessageItem{}, nil, err
+	}
+	if len(senderRows) == 0 {
+		return MessageItem{}, nil, apperr.Internal("sender not found", nil)
 	}
 	sender := newUserItemFromDB(senderRows[0].User, senderRows[0].IsFollowing)
 
@@ -395,8 +406,11 @@ func (u *MessageUsecase) SendPublicRoomMessage(ctx context.Context, senderID int
 		ViewerID: &viewerID,
 		UserIds:  []int64{senderID},
 	})
-	if err != nil || len(senderRows) == 0 {
+	if err != nil {
 		return PublicRoomMessageItem{}, err
+	}
+	if len(senderRows) == 0 {
+		return PublicRoomMessageItem{}, apperr.Internal("sender not found", nil)
 	}
 	sender := newUserItemFromDB(senderRows[0].User, senderRows[0].IsFollowing)
 

@@ -12,10 +12,7 @@ func (server *Server) getGlobalFeed(ctx *gin.Context) {
 		return
 	}
 	page := offset / size
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 	tweets, err := server.feedUC.GetGlobalFeed(ctx, page, size+1, viewerID)
 	if err != nil {
 		writeError(ctx, err)
@@ -55,10 +52,7 @@ func (server *Server) getUserFeed(ctx *gin.Context) {
 		return
 	}
 	page := offset / size
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 	tweets, err := server.feedUC.GetUserFeed(ctx, req.ID, page, size+1, viewerID)
 	if err != nil {
 		writeError(ctx, err)

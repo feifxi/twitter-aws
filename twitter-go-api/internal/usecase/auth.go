@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"google.golang.org/api/idtoken"
 )
 
@@ -36,7 +36,7 @@ func (u *AuthUsecase) LoginWithGoogle(ctx context.Context, idToken string) (Auth
 
 	user, err := u.store.GetUserByEmail(ctx, email)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			return AuthResult{}, err
 		}
 

@@ -1,18 +1,17 @@
 package server
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/chanombude/twitter-go-api/internal/apiresponse"
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	zlog "github.com/rs/zerolog/log"
 )
@@ -46,14 +45,14 @@ func writeError(ctx *gin.Context, err error) {
 
 	var validationErrs validator.ValidationErrors
 	if errors.As(err, &validationErrs) {
-		out := make([]apiresponse.FieldError, len(validationErrs))
+		out := make([]apperr.FieldError, len(validationErrs))
 		for i, fe := range validationErrs {
-			out[i] = apiresponse.FieldError{
+			out[i] = apperr.FieldError{
 				Field:   fe.Field(),
 				Message: msgForTag(fe),
 			}
 		}
-		ctx.JSON(http.StatusBadRequest, apiresponse.Error{
+		ctx.JSON(http.StatusBadRequest, apperr.ErrorResponse{
 			Code:      "VALIDATION_ERROR",
 			Message:   "invalid request payload",
 			RequestID: requestID,
@@ -63,13 +62,13 @@ func writeError(ctx *gin.Context, err error) {
 	}
 	var numErr *strconv.NumError
 	if errors.As(err, &numErr) {
-		response := apiresponse.Error{
+		response := apperr.ErrorResponse{
 			Code:      "VALIDATION_ERROR",
 			Message:   "invalid request payload",
 			RequestID: requestID,
 		}
 		if field, msg := inferNumericFieldError(ctx); field != "" {
-			response.Details = []apiresponse.FieldError{{Field: field, Message: msg}}
+			response.Details = []apperr.FieldError{{Field: field, Message: msg}}
 		}
 		ctx.JSON(http.StatusBadRequest, response)
 		return
@@ -95,7 +94,7 @@ func writeError(ctx *gin.Context, err error) {
 			code = "BAD_REQUEST"
 			message = "invalid request"
 		}
-	} else if errors.Is(err, sql.ErrNoRows) {
+	} else if errors.Is(err, pgx.ErrNoRows) {
 		status = http.StatusNotFound
 		code = "NOT_FOUND"
 		message = "resource not found"
@@ -136,7 +135,7 @@ func writeError(ctx *gin.Context, err error) {
 			Msg("Internal server error")
 	}
 
-	ctx.JSON(status, apiresponse.Error{Code: code, Message: message, RequestID: requestID})
+	ctx.JSON(status, apperr.ErrorResponse{Code: code, Message: message, RequestID: requestID})
 }
 
 func defaultMessage(in, fallback string) string {
@@ -147,11 +146,11 @@ func defaultMessage(in, fallback string) string {
 }
 
 func writeValidationError(ctx *gin.Context, field, message string) {
-	ctx.JSON(http.StatusBadRequest, apiresponse.Error{
+	ctx.JSON(http.StatusBadRequest, apperr.ErrorResponse{
 		Code:      "VALIDATION_ERROR",
 		Message:   "invalid request payload",
 		RequestID: middleware.GetRequestID(ctx),
-		Details: []apiresponse.FieldError{
+		Details: []apperr.FieldError{
 			{Field: field, Message: message},
 		},
 	})

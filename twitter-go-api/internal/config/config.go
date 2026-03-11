@@ -18,7 +18,6 @@ type Config struct {
 	MaxMediaBytes            int64  `mapstructure:"MAX_MEDIA_BYTES"`
 	MaxAvatarBytes           int64  `mapstructure:"MAX_AVATAR_BYTES"`
 	FrontendURL              string `mapstructure:"FRONTEND_URL"`
-	TrustedProxies           string `mapstructure:"TRUSTED_PROXIES"`
 	CookieDomain             string `mapstructure:"COOKIE_DOMAIN"`
 	CookieSameSite           string `mapstructure:"COOKIE_SAME_SITE"`
 	CookieSecure             bool   `mapstructure:"COOKIE_SECURE"`
@@ -38,7 +37,6 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetConfigType("env")
 
 	viper.SetDefault("FRONTEND_URL", "http://localhost:3000")
-	viper.SetDefault("TRUSTED_PROXIES", "")
 	viper.SetDefault("COOKIE_DOMAIN", "")
 	viper.SetDefault("COOKIE_SAME_SITE", "Lax")
 	viper.SetDefault("COOKIE_SECURE", false)
@@ -61,7 +59,6 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.BindEnv("MAX_MEDIA_BYTES")
 	viper.BindEnv("MAX_AVATAR_BYTES")
 	viper.BindEnv("FRONTEND_URL")
-	viper.BindEnv("TRUSTED_PROXIES")
 	viper.BindEnv("COOKIE_DOMAIN")
 	viper.BindEnv("COOKIE_SAME_SITE")
 	viper.BindEnv("COOKIE_SECURE")
@@ -103,9 +100,6 @@ func (c Config) ValidateForRuntime() error {
 	if !c.CookieSecure {
 		return fmt.Errorf("COOKIE_SECURE must be true in production")
 	}
-	// if strings.TrimSpace(c.TrustedProxies) == "" {
-	// 	return fmt.Errorf("TRUSTED_PROXIES is required in production")
-	// }
 	if strings.Contains(strings.ToLower(c.DBSource), "sslmode=disable") {
 		return fmt.Errorf("DATABASE_URL must use sslmode in production")
 	}

@@ -42,7 +42,12 @@ func (server *Server) listenRedisNotifications() {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-server.done
+		cancel()
+	}()
+
 	pubsub := server.redis.Subscribe(ctx, "notifications")
 	defer pubsub.Close()
 
@@ -159,7 +164,7 @@ func (server *Server) getUnreadNotificationCount(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	ctx.JSON(http.StatusOK, count)
+	ctx.JSON(http.StatusOK, gin.H{"count": count})
 }
 
 func (server *Server) markNotificationRead(ctx *gin.Context) {

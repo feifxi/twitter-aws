@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"strconv"
+	"strings"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/middleware"
@@ -55,6 +56,31 @@ func mustCurrentUserID(ctx *gin.Context) (int64, bool) {
 		return 0, false
 	}
 	return userID, true
+}
+
+// optionalViewerID returns a pointer to the current user's ID if authenticated, or nil otherwise.
+func optionalViewerID(ctx *gin.Context) *int64 {
+	if id, ok := getCurrentUserID(ctx); ok {
+		return &id
+	}
+	return nil
+}
+
+// parseLimit reads a "limit" query param, applying a default and max cap.
+func parseLimit(ctx *gin.Context, defaultVal, max int32) int32 {
+	raw := strings.TrimSpace(ctx.Query("limit"))
+	if raw == "" {
+		return defaultVal
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || parsed < 1 {
+		return defaultVal
+	}
+	limit := int32(parsed)
+	if limit > max {
+		return max
+	}
+	return limit
 }
 
 func parseOffsetAndSize(ctx *gin.Context) (int32, int32, bool) {

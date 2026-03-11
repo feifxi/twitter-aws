@@ -1,10 +1,18 @@
 package usecase
 
 import (
+	"io"
 	"time"
 
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
+
+// FileUpload represents an uploaded file (used for avatars, tweet media, etc.).
+type FileUpload struct {
+	Filename    string
+	ContentType string
+	Reader      io.Reader
+}
 
 // Notification type constants.
 const (

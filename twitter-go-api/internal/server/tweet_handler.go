@@ -52,7 +52,7 @@ func (server *Server) createTweet(ctx *gin.Context) {
 			return
 		}
 
-		input.Media = &usecase.MediaUpload{
+		input.Media = &usecase.FileUpload{
 			Filename:    req.Media.Filename,
 			ContentType: detectedContentType,
 			Reader:      reader,
@@ -90,10 +90,7 @@ func (server *Server) getTweet(ctx *gin.Context) {
 		writeError(ctx, err)
 		return
 	}
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 	tweet, err := server.tweetUC.GetTweet(ctx, req.ID, viewerID)
 	if err != nil {
 		writeError(ctx, err)
@@ -113,10 +110,7 @@ func (server *Server) getReplies(ctx *gin.Context) {
 		return
 	}
 	page := offset / size
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 	tweets, err := server.tweetUC.ListReplies(ctx, req.ID, page, size+1, viewerID)
 	if err != nil {
 		writeError(ctx, err)

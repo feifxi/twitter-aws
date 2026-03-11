@@ -13,7 +13,7 @@ func populateTweetItems(ctx context.Context, store db.Store, inputs []TweetHydra
 		return []TweetItem{}, nil
 	}
 
-	vID := nullViewerID(viewerID)
+	vID := viewerID
 
 	// 1. Collect unique IDs
 	userIDsMap := make(map[int64]bool)

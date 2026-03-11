@@ -56,7 +56,7 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 			return
 		}
 
-		input.Avatar = &usecase.AvatarUpload{
+		input.Avatar = &usecase.FileUpload{
 			Filename:    req.Avatar.Filename,
 			ContentType: detectedContentType,
 			Reader:      reader,
@@ -79,10 +79,7 @@ func (server *Server) getUser(ctx *gin.Context) {
 		return
 	}
 
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 
 	user, err := server.userUC.GetUser(ctx, req.ID, viewerID)
 	if err != nil {
@@ -148,10 +145,7 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 	}
 	page := offset / size
 
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 
 	users, err := server.userUC.ListFollowers(ctx, req.ID, page, size+1, viewerID)
 	if err != nil {
@@ -175,10 +169,7 @@ func (server *Server) listFollowing(ctx *gin.Context) {
 	}
 	page := offset / size
 
-	var viewerID *int64
-	if id, ok := getCurrentUserID(ctx); ok {
-		viewerID = &id
-	}
+	viewerID := optionalViewerID(ctx)
 
 	users, err := server.userUC.ListFollowing(ctx, req.ID, page, size+1, viewerID)
 	if err != nil {

@@ -2,27 +2,20 @@ package usecase
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/db"
+	"github.com/jackc/pgx/v5"
 )
-
-type MediaUpload struct {
-	Filename    string
-	ContentType string
-	Reader      interface {
-		Read(p []byte) (n int, err error)
-	}
-}
 
 type CreateTweetInput struct {
 	UserID   int64
 	Content  *string
 	ParentID *int64
-	Media    *MediaUpload
+	Media    *FileUpload
 }
 
 func (u *TweetUsecase) CreateTweet(ctx context.Context, input CreateTweetInput) (TweetItem, error) {
@@ -176,6 +169,8 @@ func (u *TweetUsecase) DeleteTweet(ctx context.Context, userID, tweetID int64) e
 
 		return nil
 	}, func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		seen := make(map[string]struct{}, len(mediaURLs))
 		for _, url := range mediaURLs {
 			if url == nil || *url == "" {
@@ -185,7 +180,7 @@ func (u *TweetUsecase) DeleteTweet(ctx context.Context, userID, tweetID int64) e
 				continue
 			}
 			seen[*url] = struct{}{}
-			_ = u.storage.DeleteFile(ctx, *url)
+			_ = u.storage.DeleteFile(cleanupCtx, *url)
 		}
 	})
 	if err != nil {
@@ -196,7 +191,7 @@ func (u *TweetUsecase) DeleteTweet(ctx context.Context, userID, tweetID int64) e
 }
 
 func (u *TweetUsecase) GetTweet(ctx context.Context, tweetID int64, viewerID *int64) (TweetItem, error) {
-	r, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID, ViewerID: nullViewerID(viewerID)})
+	r, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID, ViewerID: viewerID})
 	if err != nil {
 		return TweetItem{}, err
 	}
@@ -215,9 +210,7 @@ func (u *TweetUsecase) GetTweet(ctx context.Context, tweetID int64, viewerID *in
 }
 
 func (u *TweetUsecase) ListReplies(ctx context.Context, tweetID int64, page, size int32, viewerID *int64) ([]TweetItem, error) {
-	vID := nullViewerID(viewerID)
-
-	_, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID, ViewerID: vID})
+	_, err := u.store.GetTweet(ctx, db.GetTweetParams{ID: tweetID, ViewerID: viewerID})
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +298,7 @@ func (u *TweetUsecase) Retweet(ctx context.Context, userID, tweetID int64) (Twee
 		})
 		if err != nil {
 			// ON CONFLICT DO NOTHING returns no row for existing retweet.
-			if errors.Is(err, sql.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) {
 				existing, getErr := q.GetUserRetweet(ctx, db.GetUserRetweetParams{
 					UserID:    userID,
 					RetweetID: &originalTweet.Tweet.ID,
@@ -349,7 +342,7 @@ func (u *TweetUsecase) UndoRetweet(ctx context.Context, userID, tweetID int64) e
 		UserID:    userID,
 		RetweetID: &originalID,
 	})
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	return err
