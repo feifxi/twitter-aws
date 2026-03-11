@@ -47,6 +47,9 @@ func (server *Server) setupRouter() {
 	router.GET("/readyz", server.readyz)
 
 	api := router.Group("/api/v1")
+	if server.config.GatewaySecret != "" {
+		api.Use(middleware.GatewayGuard(server.config.GatewaySecret))
+	}
 	api.Use(middleware.RateLimiterWithRedis(server.redis, 20, 60, "rl:api"))
 	server.registerDomainRoutes(api)
 

@@ -12,10 +12,11 @@ import (
 )
 
 type CreateTweetInput struct {
-	UserID   int64
-	Content  *string
-	ParentID *int64
-	Media    *FileUpload
+	UserID    int64
+	Content   *string
+	ParentID  *int64
+	MediaKey  *string // S3 object key (already uploaded via presigned URL)
+	MediaType *string // "IMAGE" or "VIDEO"
 }
 
 func (u *TweetUsecase) CreateTweet(ctx context.Context, input CreateTweetInput) (TweetItem, error) {
@@ -26,24 +27,12 @@ func (u *TweetUsecase) CreateTweet(ctx context.Context, input CreateTweetInput) 
 
 	var mediaType *string
 	var mediaURL *string
-	if input.Media != nil {
-		contentType := strings.ToLower(input.Media.ContentType)
-		switch {
-		case strings.HasPrefix(contentType, "image/"):
-			img := MediaTypeImage
-			mediaType = &img
-		case strings.HasPrefix(contentType, "video/"):
-			vid := MediaTypeVideo
-			mediaType = &vid
-		default:
-			return TweetItem{}, apperr.BadRequest("only images or videos are allowed")
-		}
-
-		uploadedURL, err := u.storage.UploadFile(ctx, input.Media.Reader, input.Media.Filename, contentType)
-		if err != nil {
-			return TweetItem{}, err
-		}
-		mediaURL = &uploadedURL
+	var mediaKey string
+	if input.MediaKey != nil && *input.MediaKey != "" {
+		mediaType = input.MediaType
+		mediaKey = *input.MediaKey
+		publicURL := u.storage.PublicURL(mediaKey)
+		mediaURL = &publicURL
 	}
 
 	if trimmedContent == "" && mediaURL == nil {
@@ -103,8 +92,8 @@ func (u *TweetUsecase) CreateTweet(ctx context.Context, input CreateTweetInput) 
 		}
 	})
 	if err != nil {
-		if mediaURL != nil {
-			_ = u.storage.DeleteFile(ctx, *mediaURL)
+		if mediaKey != "" {
+			_ = u.storage.DeleteFile(ctx, mediaKey)
 		}
 		return TweetItem{}, err
 	}

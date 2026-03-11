@@ -1,0 +1,21 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is git-ignored (add to .gitignore if not already).
+
+project_name      = "chmtwt"
+aws_region        = "ap-southeast-1"
+
+# Your public IP for SSH (get it from: curl ifconfig.me)
+my_ip = "YOUR_IP/32"
+
+# Optional: EC2 key pair name (leave empty to use EICE/SSM only)
+ec2_key_pair_name = ""
+
+# RDS credentials
+db_username = "postgres"
+db_password = "CHANGE_ME_TO_A_STRONG_PASSWORD"
+
+# API Gateway → EC2 secret header
+gateway_secret = "CHANGE_ME_TO_A_RANDOM_SECRET"
+
+# Frontend URL(s) for CORS — comma-separated
+frontend_url = "http://localhost:3000"

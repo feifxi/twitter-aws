@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
-	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -94,24 +92,21 @@ func (m *mockAuthUC) GetMe(context.Context, int64) (usecase.UserItem, error) {
 	return usecase.UserItem{}, nil
 }
 
-func TestCreateTweetSuccessUsesDetectedMediaType(t *testing.T) {
+func TestCreateTweetSuccessPassesMediaKeyAndType(t *testing.T) {
 	t.Parallel()
 
-	var gotType string
-	var gotBytes []byte
+	var gotMediaKey, gotMediaType string
 	called := false
 	mock := &mockTweetUC{
 		createTweetFn: func(_ context.Context, input usecase.CreateTweetInput) (usecase.TweetItem, error) {
 			called = true
-			if input.Media == nil {
-				t.Fatal("expected media input")
+			if input.MediaKey == nil {
+				t.Fatal("expected media key input")
 			}
-			gotType = input.Media.ContentType
-			b, err := io.ReadAll(input.Media.Reader)
-			if err != nil {
-				t.Fatalf("failed to read media reader: %v", err)
+			gotMediaKey = *input.MediaKey
+			if input.MediaType != nil {
+				gotMediaType = *input.MediaType
 			}
-			gotBytes = b
 			return usecase.TweetItem{
 				ID:        123,
 				Content:   input.Content,
@@ -125,21 +120,11 @@ func TestCreateTweetSuccessUsesDetectedMediaType(t *testing.T) {
 		},
 	}
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	_ = writer.WriteField("content", "hello")
-	png := append([]byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, bytes.Repeat([]byte{0x00}, 16)...)
-	part, _ := writer.CreateFormFile("media", "photo.png")
-	_, _ = part.Write(png)
-	_ = writer.Close()
-
-	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", &body, writer.FormDataContentType())
+	reqBody := `{"content":"hello","mediaKey":"tweets/uuid_photo.png","mediaType":"IMAGE"}`
+	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 7)
 
-	s := &Server{
-		config:  config.Config{MaxMediaBytes: 10 << 20},
-		tweetUC: mock,
-	}
+	s := &Server{tweetUC: mock}
 	s.createTweet(ctx)
 
 	if rec.Code != http.StatusCreated {
@@ -148,21 +133,21 @@ func TestCreateTweetSuccessUsesDetectedMediaType(t *testing.T) {
 	if !called {
 		t.Fatal("expected createTweet usecase to be called")
 	}
-	if gotType != "image/png" {
-		t.Fatalf("expected image/png, got %q", gotType)
+	if gotMediaKey != "tweets/uuid_photo.png" {
+		t.Fatalf("expected tweets/uuid_photo.png, got %q", gotMediaKey)
 	}
-	if !bytes.Equal(gotBytes, png) {
-		t.Fatal("media bytes changed before reaching usecase")
+	if gotMediaType != "IMAGE" {
+		t.Fatalf("expected IMAGE, got %q", gotMediaType)
 	}
 	if !strings.Contains(rec.Body.String(), `"id":123`) {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 }
 
-func TestUpdateProfileSuccessUsesDetectedAvatarType(t *testing.T) {
+func TestUpdateProfileSuccessPassesAvatarKey(t *testing.T) {
 	t.Parallel()
 
-	var gotType string
+	var gotAvatarKey string
 	called := false
 	mock := &mockUserUC{
 		updateProfileFn: func(_ context.Context, userID int64, input usecase.UpdateProfileInput) (usecase.UserItem, error) {
@@ -170,10 +155,10 @@ func TestUpdateProfileSuccessUsesDetectedAvatarType(t *testing.T) {
 			if userID != 5 {
 				t.Fatalf("expected userID=5, got %d", userID)
 			}
-			if input.Avatar == nil {
-				t.Fatal("expected avatar input")
+			if input.AvatarKey == nil {
+				t.Fatal("expected avatar key input")
 			}
-			gotType = input.Avatar.ContentType
+			gotAvatarKey = *input.AvatarKey
 			return usecase.UserItem{
 				ID:       userID,
 				Username: "tester",
@@ -182,21 +167,11 @@ func TestUpdateProfileSuccessUsesDetectedAvatarType(t *testing.T) {
 		},
 	}
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	_ = writer.WriteField("displayName", "new name")
-	png := append([]byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, bytes.Repeat([]byte{0x00}, 8)...)
-	part, _ := writer.CreateFormFile("avatar", "avatar.png")
-	_, _ = part.Write(png)
-	_ = writer.Close()
-
-	ctx, rec := newHandlerTestContext(http.MethodPut, "/api/v1/users/profile", &body, writer.FormDataContentType())
+	reqBody := `{"displayName":"new name","avatarKey":"avatars/uuid_avatar.png"}`
+	ctx, rec := newHandlerTestContext(http.MethodPut, "/api/v1/users/profile", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 5)
 
-	s := &Server{
-		config: config.Config{MaxAvatarBytes: 5 << 20},
-		userUC: mock,
-	}
+	s := &Server{userUC: mock}
 	s.updateProfile(ctx)
 
 	if rec.Code != http.StatusOK {
@@ -205,8 +180,8 @@ func TestUpdateProfileSuccessUsesDetectedAvatarType(t *testing.T) {
 	if !called {
 		t.Fatal("expected updateProfile usecase to be called")
 	}
-	if gotType != "image/png" {
-		t.Fatalf("expected image/png, got %q", gotType)
+	if gotAvatarKey != "avatars/uuid_avatar.png" {
+		t.Fatalf("expected avatars/uuid_avatar.png, got %q", gotAvatarKey)
 	}
 }
 

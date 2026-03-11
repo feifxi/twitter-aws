@@ -2,16 +2,14 @@ package usecase
 
 import (
 	"context"
-	"strings"
 
-	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/db"
 )
 
 type UpdateProfileInput struct {
 	Bio         *string
 	DisplayName *string
-	Avatar      *FileUpload
+	AvatarKey   *string // S3 object key (already uploaded via presigned URL)
 }
 
 func (u *UserUsecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {
@@ -30,18 +28,9 @@ func (u *UserUsecase) UpdateProfile(ctx context.Context, userID int64, input Upd
 	}
 
 	newAvatar := existingUser.User.AvatarUrl
-	uploadedAvatarURL := ""
-	if input.Avatar != nil {
-		contentType := strings.ToLower(input.Avatar.ContentType)
-		if !strings.HasPrefix(contentType, "image/") {
-			return UserItem{}, apperr.BadRequest("avatar must be an image")
-		}
-
-		uploadedAvatarURL, err = u.storage.UploadFile(ctx, input.Avatar.Reader, input.Avatar.Filename, input.Avatar.ContentType)
-		if err != nil {
-			return UserItem{}, err
-		}
-		newAvatar = &uploadedAvatarURL
+	if input.AvatarKey != nil && *input.AvatarKey != "" {
+		url := u.storage.PublicURL(*input.AvatarKey)
+		newAvatar = &url
 	}
 
 	bio := existingUser.User.Bio
@@ -61,13 +50,14 @@ func (u *UserUsecase) UpdateProfile(ctx context.Context, userID int64, input Upd
 		AvatarUrl:   newAvatar,
 	})
 	if err != nil {
-		if uploadedAvatarURL != "" {
-			_ = u.storage.DeleteFile(ctx, uploadedAvatarURL)
+		if input.AvatarKey != nil {
+			_ = u.storage.DeleteFile(ctx, *input.AvatarKey)
 		}
 		return UserItem{}, err
 	}
 
-	if uploadedAvatarURL != "" && existingUser.User.AvatarUrl != nil {
+	// Clean up old avatar if we just replaced it
+	if input.AvatarKey != nil && existingUser.User.AvatarUrl != nil {
 		_ = u.storage.DeleteFile(ctx, *existingUser.User.AvatarUrl)
 	}
 

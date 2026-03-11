@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,94 +41,69 @@ func setAuthorizedUser(ctx *gin.Context, userID int64) {
 	})
 }
 
-func TestCreateTweetRejectsUnsupportedMediaExtension(t *testing.T) {
+func TestCreateTweetRejectsInvalidMediaKey(t *testing.T) {
 	t.Parallel()
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	_ = writer.WriteField("content", "hello")
-
-	part, err := writer.CreateFormFile("media", "payload.exe")
-	if err != nil {
-		t.Fatalf("failed to create media part: %v", err)
-	}
-	if _, err := part.Write([]byte("MZ fake")); err != nil {
-		t.Fatalf("failed to write media part: %v", err)
-	}
-	_ = writer.Close()
-
-	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", &body, writer.FormDataContentType())
+	// mediaKey without "/" is invalid format
+	reqBody := `{"content":"hello","mediaKey":"invalid-no-slash","mediaType":"IMAGE"}`
+	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 1)
 
-	s := &Server{config: config.Config{MaxMediaBytes: 10 << 20}}
+	s := &Server{config: config.Config{}}
 	s.createTweet(ctx)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"code":"VALIDATION_ERROR"`) {
+	if !strings.Contains(rec.Body.String(), "invalid media key") {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 }
 
-func TestCreateTweetRejectsInvalidDetectedMediaType(t *testing.T) {
+func TestCreateTweetRejectsInvalidMediaType(t *testing.T) {
 	t.Parallel()
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	_ = writer.WriteField("content", "hello")
-
-	part, err := writer.CreateFormFile("media", "payload.png")
-	if err != nil {
-		t.Fatalf("failed to create media part: %v", err)
-	}
-	// Not real PNG bytes, should be detected as text/plain.
-	if _, err := part.Write([]byte("not-an-image")); err != nil {
-		t.Fatalf("failed to write media part: %v", err)
-	}
-	_ = writer.Close()
-
-	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", &body, writer.FormDataContentType())
+	reqBody := `{"content":"hello","mediaKey":"tweets/uuid_photo.png","mediaType":"EXECUTABLE"}`
+	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 1)
 
-	s := &Server{config: config.Config{MaxMediaBytes: 10 << 20}}
+	s := &Server{config: config.Config{}}
 	s.createTweet(ctx)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "unsupported media type") {
-		t.Fatalf("unexpected response body: %s", rec.Body.String())
+		t.Fatalf("expected 400 for invalid mediaType, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestUpdateProfileRejectsUnsupportedAvatarExtension(t *testing.T) {
+func TestCreateTweetRejectsMediaKeyWithoutMediaType(t *testing.T) {
 	t.Parallel()
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	_ = writer.WriteField("displayName", "tester")
-
-	part, err := writer.CreateFormFile("avatar", "avatar.svg")
-	if err != nil {
-		t.Fatalf("failed to create avatar part: %v", err)
-	}
-	if _, err := part.Write([]byte("<svg></svg>")); err != nil {
-		t.Fatalf("failed to write avatar part: %v", err)
-	}
-	_ = writer.Close()
-
-	ctx, rec := newHandlerTestContext(http.MethodPut, "/api/v1/users/profile", &body, writer.FormDataContentType())
+	reqBody := `{"content":"hello","mediaKey":"tweets/uuid_photo.png"}`
+	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 1)
 
-	s := &Server{config: config.Config{MaxAvatarBytes: 5 << 20}}
+	s := &Server{config: config.Config{}}
+	s.createTweet(ctx)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing mediaType, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUpdateProfileRejectsEmptyJSON(t *testing.T) {
+	t.Parallel()
+
+	// Sending valid JSON with no fields is fine (nothing to update)
+	// but invalid JSON should fail
+	reqBody := `not-json`
+	ctx, rec := newHandlerTestContext(http.MethodPut, "/api/v1/users/profile", bytes.NewBufferString(reqBody), "application/json")
+	setAuthorizedUser(ctx, 1)
+
+	s := &Server{config: config.Config{}}
 	s.updateProfile(ctx)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "unsupported file extension") {
-		t.Fatalf("unexpected response body: %s", rec.Body.String())
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

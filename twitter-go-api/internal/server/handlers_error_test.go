@@ -85,20 +85,18 @@ func TestCreateTweet_UsecaseErrorReturnsInternalError(t *testing.T) {
 		},
 	}
 
-	req := mustBuildMultipartForm(http.MethodPost, "/api/v1/tweets", map[string]string{"content": "hello"})
-	w := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	reqBody := `{"content":"hello"}`
+	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 1)
 
 	s := &Server{tweetUC: mock}
 	s.createTweet(ctx)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 for usecase error, got %d body=%s", w.Code, w.Body.String())
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for usecase error, got %d body=%s", rec.Code, rec.Body.String())
 	}
 	var out map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("invalid json: %v", err)
 	}
 	if out["code"] != "INTERNAL_ERROR" {
@@ -121,20 +119,18 @@ func TestCreateTweetWithoutMedia_SuccessPath(t *testing.T) {
 		},
 	}
 
-	req := mustBuildMultipartForm(http.MethodPost, "/api/v1/tweets", map[string]string{"content": "hello"})
-	w := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(w)
-	ctx.Request = req
+	reqBody := `{"content":"hello"}`
+	ctx, rec := newHandlerTestContext(http.MethodPost, "/api/v1/tweets", bytes.NewBufferString(reqBody), "application/json")
 	setAuthorizedUser(ctx, 3)
 
 	s := &Server{tweetUC: mock}
 	s.createTweet(ctx)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rec.Code, rec.Body.String())
 	}
 	var out map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("invalid json: %v", err)
 	}
 	if out["id"] != float64(77) {
@@ -249,23 +245,4 @@ func TestSearchHashtags_ReturnsResults(t *testing.T) {
 	if len(out) != 1 || out[0]["text"] != "golang" {
 		t.Fatalf("unexpected response: %v", out)
 	}
-}
-
-// mustBuildMultipartForm builds a multipart form POST request with given string fields.
-func mustBuildMultipartForm(method, path string, fields map[string]string) *http.Request {
-	boundary := "testboundary"
-	var body strings.Builder
-	for k, v := range fields {
-		body.WriteString("--" + boundary + "\r\n")
-		body.WriteString("Content-Disposition: form-data; name=\"" + k + "\"\r\n\r\n")
-		body.WriteString(v + "\r\n")
-	}
-	body.WriteString("--" + boundary + "--\r\n")
-
-	req, err := http.NewRequest(method, path, strings.NewReader(body.String()))
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
-	return req
 }

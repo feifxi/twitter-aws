@@ -25,8 +25,10 @@ type Config struct {
 	TokenDurationMinutes     int    `mapstructure:"TOKEN_DURATION_MINUTES"`
 	RefreshTokenDurationDays int    `mapstructure:"REFRESH_TOKEN_DURATION_DAYS"`
 	GoogleClientID           string `mapstructure:"GOOGLE_CLIENT_ID"`
-	AzureStorageConnString   string `mapstructure:"AZURE_STORAGE_CONNECTION_STRING"`
-	AzureStorageContainer    string `mapstructure:"AZURE_STORAGE_CONTAINER_NAME"`
+	S3BucketName             string `mapstructure:"S3_BUCKET_NAME"`
+	S3Region                 string `mapstructure:"S3_REGION"`
+	CloudFrontDomain         string `mapstructure:"CLOUDFRONT_DOMAIN"`
+	GatewaySecret            string `mapstructure:"GATEWAY_SECRET"`
 	RedisAddress             string `mapstructure:"REDIS_ADDRESS"`
 	RedisPassword            string `mapstructure:"REDIS_PASSWORD"`
 }
@@ -66,8 +68,10 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.BindEnv("TOKEN_DURATION_MINUTES")
 	viper.BindEnv("REFRESH_TOKEN_DURATION_DAYS")
 	viper.BindEnv("GOOGLE_CLIENT_ID")
-	viper.BindEnv("AZURE_STORAGE_CONNECTION_STRING")
-	viper.BindEnv("AZURE_STORAGE_CONTAINER_NAME")
+	viper.BindEnv("S3_BUCKET_NAME")
+	viper.BindEnv("S3_REGION")
+	viper.BindEnv("CLOUDFRONT_DOMAIN")
+	viper.BindEnv("GATEWAY_SECRET")
 	viper.BindEnv("REDIS_ADDRESS")
 	viper.BindEnv("REDIS_PASSWORD")
 
@@ -103,17 +107,20 @@ func (c Config) ValidateForRuntime() error {
 	if strings.Contains(strings.ToLower(c.DBSource), "sslmode=disable") {
 		return fmt.Errorf("DATABASE_URL must use sslmode in production")
 	}
-	if strings.TrimSpace(c.AzureStorageConnString) == "" {
-		return fmt.Errorf("AZURE_STORAGE_CONNECTION_STRING is required in production")
-	}
-	if strings.TrimSpace(c.AzureStorageContainer) == "" {
-		return fmt.Errorf("AZURE_STORAGE_CONTAINER_NAME is required in production")
-	}
 	if strings.TrimSpace(c.GoogleClientID) == "" {
 		return fmt.Errorf("GOOGLE_CLIENT_ID is required in production")
 	}
 	if len(strings.TrimSpace(c.TokenSymmetricKey)) < 32 {
 		return fmt.Errorf("TOKEN_SYMMETRIC_KEY must be at least 32 characters in production")
+	}
+	if strings.TrimSpace(c.S3BucketName) == "" {
+		return fmt.Errorf("S3_BUCKET_NAME is required in production")
+	}
+	if strings.TrimSpace(c.S3Region) == "" {
+		return fmt.Errorf("S3_REGION is required in production")
+	}
+	if strings.TrimSpace(c.CloudFrontDomain) == "" {
+		return fmt.Errorf("CLOUDFRONT_DOMAIN is required in production")
 	}
 
 	return nil

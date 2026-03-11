@@ -1,7 +1,6 @@
 package server
 
 import (
-	"mime/multipart"
 	"net/http"
 
 	"github.com/chanombude/twitter-go-api/internal/apperr"
@@ -10,9 +9,9 @@ import (
 )
 
 type updateProfileRequest struct {
-	DisplayName *string               `form:"displayName" binding:"omitempty,max=30"`
-	Bio         *string               `form:"bio" binding:"omitempty,max=160"`
-	Avatar      *multipart.FileHeader `form:"avatar"`
+	DisplayName *string `json:"displayName" binding:"omitempty,max=30"`
+	Bio         *string `json:"bio" binding:"omitempty,max=160"`
+	AvatarKey   *string `json:"avatarKey" binding:"omitempty"`
 }
 
 func (server *Server) updateProfile(ctx *gin.Context) {
@@ -22,7 +21,7 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 	}
 
 	var req updateProfileRequest
-	if err := ctx.ShouldBind(&req); err != nil {
+	if err := ctx.ShouldBindJSON(&req); err != nil {
 		writeError(ctx, err)
 		return
 	}
@@ -30,37 +29,7 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 	input := usecase.UpdateProfileInput{
 		DisplayName: req.DisplayName,
 		Bio:         req.Bio,
-	}
-
-	// Check if avatar is provided
-	if req.Avatar != nil {
-		if server.config.MaxAvatarBytes > 0 && req.Avatar.Size > server.config.MaxAvatarBytes {
-			writeValidationError(ctx, "avatar", "file size exceeds limit")
-			return
-		}
-
-		if !hasAllowedExtension(req.Avatar.Filename, avatarAllowedExts) {
-			writeValidationError(ctx, "avatar", "unsupported file extension")
-			return
-		}
-
-		file, reader, detectedContentType, err := openAndDetectUpload(req.Avatar)
-		if err != nil {
-			writeError(ctx, apperr.BadRequest("failed to inspect avatar file"))
-			return
-		}
-		defer file.Close()
-
-		if !isAllowedType(detectedContentType, avatarAllowedMIMEs) {
-			writeValidationError(ctx, "avatar", "unsupported avatar type")
-			return
-		}
-
-		input.Avatar = &usecase.FileUpload{
-			Filename:    req.Avatar.Filename,
-			ContentType: detectedContentType,
-			Reader:      reader,
-		}
+		AvatarKey:   req.AvatarKey,
 	}
 
 	updatedUser, err := server.userUC.UpdateProfile(ctx, userID, input)

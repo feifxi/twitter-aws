@@ -60,6 +60,11 @@ func (server *Server) registerTweetRoutes(api *gin.RouterGroup, optionalAuth, re
 	tweetsPrivate.DELETE("/:id/like", server.unlikeTweet)
 	tweetsPrivate.POST("/:id/retweet", strictWriteLimiter, server.retweet)
 	tweetsPrivate.DELETE("/:id/retweet", server.undoRetweet)
+
+	// Upload presigned URL
+	uploadsPrivate := api.Group("/uploads")
+	uploadsPrivate.Use(requiredAuth)
+	uploadsPrivate.POST("/presign", strictWriteLimiter, server.presignUpload)
 }
 
 func (server *Server) registerFeedRoutes(api *gin.RouterGroup, optionalAuth, requiredAuth gin.HandlerFunc) {

@@ -22,6 +22,7 @@ type Server struct {
 	config      config.Config
 	store       db.Store
 	tokenMaker  token.Maker
+	storage     service.StorageService
 	authUC      usecase.AuthService
 	userUC      usecase.UserService
 	tweetUC     usecase.TweetService
@@ -50,7 +51,7 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 		return nil, fmt.Errorf("cannot create token maker: %w", err)
 	}
 
-	storageService, err := service.NewAzureStorageService(config)
+	storageService, err := service.NewS3StorageService(config)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create storage service: %w", err)
 	}
@@ -59,6 +60,7 @@ func NewServer(config config.Config, store db.Store, redisClient *redis.Client) 
 		config:     config,
 		store:      store,
 		tokenMaker: tokenMaker,
+		storage:    storageService,
 		redis:      redisClient,
 		sseClients: make(map[int64][]*sseClient),
 		wsClients:  make(map[int64]map[*chatWSClient]struct{}),

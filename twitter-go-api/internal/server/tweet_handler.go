@@ -1,18 +1,18 @@
 package server
 
 import (
-	"mime/multipart"
 	"net/http"
+	"strings"
 
-	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
 
 type createTweetRequest struct {
-	Content  *string               `form:"content" binding:"required_without=Media,omitempty,max=280"`
-	ParentID *int64                `form:"parentId" binding:"omitempty,min=1"`
-	Media    *multipart.FileHeader `form:"media"`
+	Content   *string `json:"content" binding:"required_without=MediaKey,omitempty,max=280"`
+	ParentID  *int64  `json:"parentId" binding:"omitempty,min=1"`
+	MediaKey  *string `json:"mediaKey" binding:"omitempty"`
+	MediaType *string `json:"mediaType" binding:"required_with=MediaKey,omitempty,oneof=IMAGE VIDEO"`
 }
 
 func (server *Server) createTweet(ctx *gin.Context) {
@@ -22,41 +22,25 @@ func (server *Server) createTweet(ctx *gin.Context) {
 	}
 
 	var req createTweetRequest
-	if err := ctx.ShouldBind(&req); err != nil {
+	if err := ctx.ShouldBindJSON(&req); err != nil {
 		writeError(ctx, err)
 		return
 	}
 
-	input := usecase.CreateTweetInput{UserID: userID, Content: req.Content, ParentID: req.ParentID}
-
-	if req.Media != nil {
-		if server.config.MaxMediaBytes > 0 && req.Media.Size > server.config.MaxMediaBytes {
-			writeValidationError(ctx, "media", "file size exceeds limit")
+	// Validate media key looks like an S3 object key (folder/uuid_file)
+	if req.MediaKey != nil && *req.MediaKey != "" {
+		if !strings.Contains(*req.MediaKey, "/") {
+			writeValidationError(ctx, "mediaKey", "invalid media key format")
 			return
 		}
+	}
 
-		if !hasAllowedExtension(req.Media.Filename, mediaAllowedExts) {
-			writeValidationError(ctx, "media", "unsupported file extension")
-			return
-		}
-
-		file, reader, detectedContentType, err := openAndDetectUpload(req.Media)
-		if err != nil {
-			writeError(ctx, apperr.BadRequest("failed to inspect media file"))
-			return
-		}
-		defer file.Close()
-
-		if !isAllowedType(detectedContentType, mediaAllowedMIMEs) {
-			writeValidationError(ctx, "media", "unsupported media type")
-			return
-		}
-
-		input.Media = &usecase.FileUpload{
-			Filename:    req.Media.Filename,
-			ContentType: detectedContentType,
-			Reader:      reader,
-		}
+	input := usecase.CreateTweetInput{
+		UserID:    userID,
+		Content:   req.Content,
+		ParentID:  req.ParentID,
+		MediaKey:  req.MediaKey,
+		MediaType: req.MediaType,
 	}
 
 	tweet, err := server.tweetUC.CreateTweet(ctx, input)

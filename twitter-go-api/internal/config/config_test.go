@@ -36,10 +36,11 @@ func TestValidateForRuntime_ProductionRequiresFrontendURL(t *testing.T) {
 		Environment:            "production",
 		CookieSameSite:         "Lax",
 		CookieSecure:           true,
-		DBSource:               "postgresql://host/db?sslmode=require",
-		AzureStorageConnString: "conn",
-		AzureStorageContainer:  "container",
-		GoogleClientID:         "client-id",
+		DBSource:          "postgresql://host/db?sslmode=require",
+		S3BucketName:      "my-bucket",
+		S3Region:          "ap-southeast-1",
+		CloudFrontDomain:  "d123.cloudfront.net",
+		GoogleClientID:    "client-id",
 	}
 	if err := cfg.ValidateForRuntime(); err == nil {
 		t.Fatal("expected error when FRONTEND_URL not set in production")
@@ -83,11 +84,12 @@ func TestValidateForRuntime_ProductionAllValidPasses(t *testing.T) {
 		FrontendURL:            "https://example.com",
 		CookieSameSite:         "Lax",
 		CookieSecure:           true,
-		DBSource:               "postgresql://host/db?sslmode=require",
-		AzureStorageConnString: "DefaultEndpointsProtocol=https;...",
-		AzureStorageContainer:  "media",
-		GoogleClientID:         "my-client-id.apps.googleusercontent.com",
-		TokenSymmetricKey:      "01234567890123456789012345678901",
+		DBSource:          "postgresql://host/db?sslmode=require",
+		S3BucketName:      "my-bucket",
+		S3Region:          "ap-southeast-1",
+		CloudFrontDomain:  "d123.cloudfront.net",
+		GoogleClientID:    "my-client-id.apps.googleusercontent.com",
+		TokenSymmetricKey: "01234567890123456789012345678901",
 	}
 	if err := cfg.ValidateForRuntime(); err != nil {
 		t.Fatalf("unexpected error for valid production config: %v", err)
