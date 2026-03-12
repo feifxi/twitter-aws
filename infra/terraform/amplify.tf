@@ -3,7 +3,7 @@
 resource "aws_amplify_app" "this" {
   name       = var.project_name
   repository = var.gh_repo_url
-  
+
   # GitHub Personal Access Token
   access_token = var.gh_token
 
@@ -32,7 +32,7 @@ resource "aws_amplify_app" "this" {
   # Environment variables for the frontend
   # Using the API Gateway URL for the backend communication
   environment_variables = {
-    NEXT_PUBLIC_API_URL = "${aws_apigatewayv2_stage.default.invoke_url}api/v1"
+    NEXT_PUBLIC_API_URL     = "${aws_apigatewayv2_stage.default.invoke_url}api/v1"
     NEXT_TELEMETRY_DISABLED = "1"
   }
 
@@ -58,8 +58,8 @@ resource "aws_amplify_branch" "main" {
   app_id      = aws_amplify_app.this.id
   branch_name = var.gh_branch
 
-  framework     = "Next.js - SSR"
-  stage         = "PRODUCTION"
+  framework         = "Next.js - SSR"
+  stage             = "PRODUCTION"
   enable_auto_build = true
 
   tags = { Name = "${var.project_name}-amplify-branch-${var.gh_branch}" }

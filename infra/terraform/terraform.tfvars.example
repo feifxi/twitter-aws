@@ -1,8 +1,8 @@
 # Copy this file to terraform.tfvars and fill in your values.
 # terraform.tfvars is git-ignored (add to .gitignore if not already).
 
-project_name      = "chmtwt"
-aws_region        = "ap-southeast-1"
+project_name = "chmtwt"
+aws_region   = "ap-southeast-1"
 
 # Your public IP for SSH (get it from: curl ifconfig.me)
 my_ip = "YOUR_IP/32"
@@ -11,6 +11,7 @@ my_ip = "YOUR_IP/32"
 ec2_key_pair_name = ""
 
 # RDS credentials
+db_name     = "twitter_db"
 db_username = "postgres"
 db_password = "CHANGE_ME_TO_A_STRONG_PASSWORD"
 
@@ -18,9 +19,10 @@ db_password = "CHANGE_ME_TO_A_STRONG_PASSWORD"
 gateway_secret = "CHANGE_ME_TO_A_RANDOM_SECRET"
 
 # Frontend URL(s) for CORS — comma-separated
-# Note: After deployment, you should add your Amplify URL here
 frontend_url = "http://localhost:3000"
 
 # GitHub / Amplify setup
-# gh_repo_url = "https://github.com/feifxi/twitter-aws"
+gh_repo_url = "https://github.com/feifxi/twitter-aws"
+gh_branch   = "main"
+# Your GitHub Personal Access Token (Classic). It needs repo and admin:repo_hook permissions. You can create one at GitHub Settings > Developer settings > Personal access tokens.
 gh_token    = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"

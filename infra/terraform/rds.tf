@@ -30,10 +30,10 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot = true
 
   # Low-cost settings (disable for learning project)
-  backup_retention_period    = 0
-  storage_encrypted          = false
+  backup_retention_period      = 0
+  storage_encrypted            = false
   performance_insights_enabled = false
-  monitoring_interval        = 0
+  monitoring_interval          = 0
 
   tags = { Name = "${var.project_name}-pgrds" }
 }
