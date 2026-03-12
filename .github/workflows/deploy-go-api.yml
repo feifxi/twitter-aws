@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. รัน Test
+      # 1. Run Test
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -49,20 +49,25 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-      # 3. Deploy ไปที่ EC2
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+      # 3. Deploy to EC2 via AWS SSM (no SSH key needed)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            cd /home/ec2-user/app
-            
-            docker compose pull
-            
-            docker compose up -d --remove-orphans
-            
-            # ลบ Image เก่าทิ้ง
-            docker image prune -f
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to EC2 via SSM
+        run: |
+          aws ssm send-command \
+            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "echo \"${{ secrets.GHCR_PAT }}\" | docker login ghcr.io -u ${{ github.actor }} --password-stdin",
+              "cd /home/ec2-user/app",
+              "docker compose pull",
+              "docker compose up -d --remove-orphans",
+              "docker image prune -f"
+            ]' \
+            --comment "Deploy Go API via GitHub Actions" \
+            --output text

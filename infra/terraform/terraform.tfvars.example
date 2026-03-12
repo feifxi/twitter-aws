@@ -1,28 +1,39 @@
-# Copy this file to terraform.tfvars and fill in your values.
-# terraform.tfvars is git-ignored (add to .gitignore if not already).
-
+# ── Project Configuration ────────────────────────────
 project_name = "chmtwt"
 aws_region   = "ap-southeast-1"
 
-# Your public IP for SSH (get it from: curl ifconfig.me)
-my_ip = "YOUR_IP/32"
-
-# Optional: EC2 key pair name (leave empty to use EICE/SSM only)
-ec2_key_pair_name = ""
-
-# RDS credentials
+# ── Database (RDS) ──────────────────────────────────
+# The password for the PostgreSQL master user
 db_name     = "twitter_db"
 db_username = "postgres"
 db_password = "CHANGE_ME_TO_A_STRONG_PASSWORD"
 
-# API Gateway → EC2 secret header
+# ── Secrets & Security ───────────────────────────────
+# API Gateway → EC2 secret header (prevents direct public access to EC2)
 gateway_secret = "CHANGE_ME_TO_A_RANDOM_SECRET"
 
-# Frontend URL(s) for CORS — comma-separated
+# Secret key for JWT token signing (Must be 32+ characters)
+# Generate one: openssl rand -base64 32
+token_symmetric_key = "CHANGE_ME_TO_A_STRONG_32_PLUS_CHAR_SECRET"
+
+# Google OAuth Web client ID for social login
+google_client_id = "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+
+# ── Frontend & CORS ──────────────────────────────────
+# Local frontend URL for development (e.g. http://localhost:3000)
+# This allows your local browser to upload directly to S3.
+# Leave empty ("") to disable local access in production.
 frontend_url = "http://localhost:3000"
 
-# GitHub / Amplify setup
+# ── CI/CD (GitHub & Amplify) ──────────────────────────
 gh_repo_url = "https://github.com/feifxi/twitter-aws"
 gh_branch   = "main"
-# Your GitHub Personal Access Token (Classic). It needs repo and admin:repo_hook permissions. You can create one at GitHub Settings > Developer settings > Personal access tokens.
-gh_token    = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
+
+# GitHub Personal Access Token (Classic). 
+# Req: 'repo' and 'admin:repo_hook' permissions.
+gh_token = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
+
+# ── Optional Overrides (Defaults are in variables.tf) ──
+# db_max_conns = "25"
+# max_media_bytes = "104857600"
+# redis_address = ""

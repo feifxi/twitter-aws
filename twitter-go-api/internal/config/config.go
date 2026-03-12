@@ -1,9 +1,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/spf13/viper"
 )
 
@@ -73,6 +77,11 @@ func LoadConfig(path string) (config Config, err error) {
 
 	viper.AutomaticEnv()
 
+	env := os.Getenv("ENVIRONMENT")
+	if env == "production" {
+		loadFromSSM()
+	}
+
 	err = viper.ReadInConfig()
 	if err != nil {
 		// It's ok if app.env doesn't exist, we will use auto env
@@ -83,6 +92,34 @@ func LoadConfig(path string) (config Config, err error) {
 
 	err = viper.Unmarshal(&config)
 	return
+}
+
+func loadFromSSM() {
+	prefix := "/chmtwt/prod/"
+	
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		fmt.Printf("Unable to load AWS config for SSM: %v\n", err)
+		return
+	}
+
+	client := ssm.NewFromConfig(cfg)
+	paginator := ssm.NewGetParametersByPathPaginator(client, &ssm.GetParametersByPathInput{
+		Path:           &prefix,
+		WithDecryption: func() *bool { b := true; return &b }(),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(context.TODO())
+		if err != nil {
+			fmt.Printf("Error fetching SSM parameters: %v\n", err)
+			return
+		}
+		for _, p := range page.Parameters {
+			key := strings.TrimPrefix(*p.Name, prefix)
+			viper.Set(key, *p.Value)
+		}
+	}
 }
 
 func (c Config) ValidateForRuntime() error {

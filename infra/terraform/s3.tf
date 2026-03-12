@@ -1,7 +1,8 @@
 # ── S3 Bucket ────────────────────────────────────────
 
 resource "aws_s3_bucket" "media" {
-  bucket = "${var.project_name}-media-s3"
+  bucket        = "${var.project_name}-media-s3"
+  force_destroy = true
 
   tags = { Name = "${var.project_name}-media-s3" }
 }
@@ -20,7 +21,7 @@ resource "aws_s3_bucket_cors_configuration" "media" {
 
   cors_rule {
     allowed_headers = ["*"]
-    allowed_methods = ["PUT"]
+    allowed_methods = ["PUT", "GET"]
     allowed_origins = local.frontend_origins
     expose_headers  = ["ETag"]
     max_age_seconds = 3600

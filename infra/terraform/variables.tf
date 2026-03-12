@@ -24,16 +24,7 @@ variable "ec2_instance_type" {
   default     = "t3.micro"
 }
 
-variable "ec2_key_pair_name" {
-  description = "Name of an existing EC2 Key Pair (leave empty to skip)"
-  type        = string
-  default     = ""
-}
 
-variable "my_ip" {
-  description = "Your public IP in CIDR notation for SSH access (e.g. 1.2.3.4/32)"
-  type        = string
-}
 
 # ── RDS ──────────────────────────────────────────────
 
@@ -67,6 +58,94 @@ variable "gateway_secret" {
   description = "Secret header value that API Gateway injects into X-Gateway-Secret"
   type        = string
   sensitive   = true
+}
+
+# ── Go API General Configuration ────────────────────────
+
+variable "db_max_conns" {
+  description = "Max open connections to the database"
+  type        = string
+  default     = "25"
+}
+
+variable "db_min_conns" {
+  description = "Min open connections to the database"
+  type        = string
+  default     = "0"
+}
+
+variable "db_max_conn_lifetime_minutes" {
+  description = "Max lifetime of a database connection in minutes"
+  type        = string
+  default     = "5"
+}
+
+variable "max_media_bytes" {
+  description = "Maximum size in bytes for media uploads"
+  type        = string
+  default     = "104857600" # 100 MB
+}
+
+variable "max_avatar_bytes" {
+  description = "Maximum size in bytes for avatar uploads"
+  type        = string
+  default     = "5242880" # 5 MB
+}
+
+variable "cookie_domain" {
+  description = "Domain for authentication cookies (leave empty for localhost)"
+  type        = string
+  default     = ""
+}
+
+variable "cookie_same_site" {
+  description = "SameSite policy for authentication cookies"
+  type        = string
+  default     = "Lax"
+}
+
+variable "cookie_secure" {
+  description = "Secure policy for authentication cookies (should be true in production)"
+  type        = string
+  default     = "true"
+}
+
+variable "token_duration_minutes" {
+  description = "Duration in minutes before the JWT token expires"
+  type        = string
+  default     = "15"
+}
+
+variable "refresh_token_duration_days" {
+  description = "Duration in days before the refresh token expires"
+  type        = string
+  default     = "30"
+}
+
+variable "redis_address" {
+  description = "Redis address (leave empty to disable Redis)"
+  type        = string
+  default     = ""
+}
+
+variable "redis_password" {
+  description = "Redis password (leave empty if none)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# ── Go API Secrets ───────────────────────────────────
+
+variable "token_symmetric_key" {
+  description = "32+ char secret key for JWT token signing"
+  type        = string
+  sensitive   = true
+}
+
+variable "google_client_id" {
+  description = "Google OAuth Web client ID"
+  type        = string
 }
 
 # ── Frontend / CORS ──────────────────────────────────

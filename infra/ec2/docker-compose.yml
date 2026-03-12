@@ -3,9 +3,9 @@ services:
     image: ghcr.io/feifxi/twitter-aws-go-api:latest
     container_name: twitter-aws-go-api
     ports:
-      - "80:8080"
-    env_file:
-      - .env
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=production
     restart: unless-stopped
     
     # ป้องกัน Log กิน Disk EC2 เต็ม

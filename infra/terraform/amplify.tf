@@ -1,3 +1,21 @@
+# ── IAM Role for Amplify ───────
+resource "aws_iam_role" "amplify" {
+  name = "${var.project_name}-amplify-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "amplify.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "amplify_admin" {
+  role       = aws_iam_role.amplify.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess-Amplify"
+}
+
 # ── Amplify App ──────────────────────────────────────
 
 resource "aws_amplify_app" "this" {
@@ -7,33 +25,36 @@ resource "aws_amplify_app" "this" {
   # GitHub Personal Access Token
   access_token = var.gh_token
 
+  iam_service_role_arn = aws_iam_role.amplify.arn
+
   # Build settings for Next.js in a sub-directory
   build_spec = <<-EOT
     version: 1
     applications:
-      - frontend:
+      - appRoot: twitter-next-web
+        frontend:
           phases:
             preBuild:
               commands:
-                - cd twitter-next-web
                 - npm ci
             build:
               commands:
                 - npm run build
           artifacts:
-            baseDirectory: twitter-next-web/.next
+            baseDirectory: .next
             files:
               - '**/*'
           cache:
             paths:
-              - twitter-next-web/node_modules/**/*
+              - node_modules/**/*
     EOT
 
   # Environment variables for the frontend
   # Using the API Gateway URL for the backend communication
   environment_variables = {
-    NEXT_PUBLIC_API_URL     = "${aws_apigatewayv2_stage.default.invoke_url}api/v1"
-    NEXT_TELEMETRY_DISABLED = "1"
+    AMPLIFY_MONOREPO_APP_ROOT = "twitter-next-web"
+    NEXT_PUBLIC_API_URL       = "${aws_apigatewayv2_stage.default.invoke_url}api/v1"
+    NEXT_TELEMETRY_DISABLED   = "1"
   }
 
   platform = "WEB_COMPUTE"

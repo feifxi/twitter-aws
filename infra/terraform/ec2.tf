@@ -32,11 +32,25 @@ resource "aws_iam_role_policy" "ec2_s3" {
         "s3:PutObject",
         "s3:DeleteObject",
         "s3:GetObject",
+        "s3:ListBucket"
       ]
-      Resource = "${aws_s3_bucket.media.arn}/*"
+
+      Resource = [
+        aws_s3_bucket.media.arn,
+        "${aws_s3_bucket.media.arn}/*"
+      ]
+      }, {
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath"
+      ]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/chmtwt/prod/*"
     }]
   })
 }
+
 
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-ec2-profile"
@@ -52,12 +66,16 @@ resource "aws_instance" "api" {
   vpc_security_group_ids = [aws_security_group.ec2.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
 
-  # Key pair is optional; EICE or SSM can be used instead.
-  key_name = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
 
   root_block_device {
-    volume_size = 8
+    volume_size = 30
     volume_type = "gp3"
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required" # Enforce IMDSv2
+    http_put_response_hop_limit = 2          # Allow Docker bridge network (2 hops)
   }
 
   tags = { Name = "${var.project_name}-ec2" }

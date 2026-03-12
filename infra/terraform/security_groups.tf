@@ -8,14 +8,6 @@ resource "aws_security_group" "ec2" {
   tags = { Name = "${var.project_name}-ec2-sg" }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "ec2_ssh_myip" {
-  security_group_id = aws_security_group.ec2.id
-  description       = "SSH from my IP"
-  ip_protocol       = "tcp"
-  from_port         = 22
-  to_port           = 22
-  cidr_ipv4         = var.my_ip
-}
 
 resource "aws_vpc_security_group_ingress_rule" "ec2_ssh_eice" {
   security_group_id            = aws_security_group.ec2.id
