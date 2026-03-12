@@ -98,11 +98,12 @@ func loadFromSSM() {
 	prefix := "/chmtwt/prod/"
 
 	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = "ap-southeast-1"
+	var opts []func(*config.LoadOptions) error
+	if region != "" {
+		opts = append(opts, config.WithRegion(region))
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	cfg, err := config.LoadDefaultConfig(context.TODO(), opts...)
 	if err != nil {
 		fmt.Printf("Unable to load AWS config for SSM: %v\n", err)
 		return
