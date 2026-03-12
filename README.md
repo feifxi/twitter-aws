@@ -53,8 +53,9 @@ brew install go node docker awscli hashicorp/tap/terraform make
 | **RDS** | Managed PostgreSQL database (private subnet) |
 | **S3** | Media storage with presigned-URL uploads |
 | **CloudFront** | CDN for serving S3 media over HTTPS |
+| **SSM Parameter Store** | Securely manages, stores, and injects runtime configuration into the Go API |
 | **Terraform** | Infrastructure as Code for all resources |
-| **GitHub Actions** | CI/CD pipeline for the Go API |
+| **GitHub Actions** | CI/CD pipeline pulling from GHCR and deploying via SSM Run Command |
 
 ## AWS Setup
 
