@@ -87,7 +87,7 @@ resource "aws_instance" "api" {
     
     # Write docker-compose.yml
     cat << 'DOCKER_COMPOSE_EOF' > /home/ec2-user/app/docker-compose.yml
-    ${file("${path.module}/../ec2/docker-compose.yml")}
+    ${templatefile("${path.module}/../ec2/docker-compose.yml", { AWS_REGION = var.aws_region })}
     DOCKER_COMPOSE_EOF
     
     # Execute setup script
