@@ -95,6 +95,14 @@ resource "aws_instance" "api" {
     
     # Final ownership fix
     chown -R ec2-user:ec2-user /home/ec2-user/app
+
+    # Bootstrap Auto-Start
+    # 1. Wait for Docker service to be fully ready
+    for i in {1..10}; do docker info >/dev/null 2>&1 && break || sleep 2; done
+
+    # 2. Try to pull and start the application immediately
+    cd /home/ec2-user/app
+    docker compose up -d || echo "⚠️ First pull failed (likely private repo or build in progress). Waiting for first GitHub Action deployment..."
   EOF
 }
 
