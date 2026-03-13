@@ -1,0 +1,41 @@
+// --- Prometheus Metrics ---
+prometheus.scrape "api" {
+  targets = [{"__address__" = "api:8080"}]
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = "${PROMETHEUS_URL}"
+    basic_auth {
+      username = "${PROMETHEUS_USER}"
+      password = "${API_TOKEN}"
+    }
+  }
+}
+
+// --- Loki Logs ---
+loki.relabel "api" {
+  forward_to = [loki.write.grafana_cloud.receiver]
+
+  rule {
+    source_labels = ["container_name"]
+    target_label  = "job"
+  }
+}
+
+loki.source.docker "api" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = [{"name" = "twitter-aws-go-api"}]
+  forward_to = [loki.relabel.api.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = "${LOKI_URL}"
+    basic_auth {
+      username = "${LOKI_USER}"
+      password = "${API_TOKEN}"
+    }
+  }
+}

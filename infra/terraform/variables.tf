@@ -175,3 +175,37 @@ variable "gh_token" {
   type        = string
   sensitive   = true
 }
+
+# ── Grafana Cloud (Optional) ──────────────────────────
+
+variable "grafana_cloud_prometheus_url" {
+  description = "Grafana Cloud Prometheus remote write URL"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_cloud_prometheus_user" {
+  description = "Grafana Cloud Prometheus user ID"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_cloud_loki_url" {
+  description = "Grafana Cloud Loki URL"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_cloud_loki_user" {
+  description = "Grafana Cloud Loki user ID"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_cloud_api_token" {
+  description = "Grafana Cloud API Token"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+

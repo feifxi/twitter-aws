@@ -9,9 +9,23 @@ services:
       - AWS_REGION=${AWS_REGION}
     restart: unless-stopped
     
-    # ป้องกัน Log กิน Disk EC2 เต็ม
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Grafana Alloy (Monitoring Agent)
+  # Only starts if ENABLE_MONITORING is true
+  alloy:
+    image: grafana/alloy:latest
+    container_name: grafana-alloy
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: run --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    restart: unless-stopped
+    depends_on:
+      - api
+    profiles:
+      - ${MONITORING_PROFILE}

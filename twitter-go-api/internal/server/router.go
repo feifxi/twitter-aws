@@ -11,12 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func (server *Server) setupRouter() {
 	configureValidationFieldNames()
 
 	router := gin.New()
+	router.Use(middleware.Metrics())
 	router.Use(middleware.RequestID())
 	router.Use(logger.GinMiddleware())
 	router.Use(gin.Recovery())
@@ -42,6 +44,7 @@ func (server *Server) setupRouter() {
 
 	router.GET("/healthz", server.healthz)
 	router.GET("/readyz", server.readyz)
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	api := router.Group("/api/v1")
 	if server.config.GatewaySecret != "" {

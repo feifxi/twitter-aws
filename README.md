@@ -13,6 +13,7 @@ Full-stack Twitter/X clone with a Next.js frontend, Go backend, and AWS infrastr
 - **Direct Messages** — Real-time conversations over WebSocket
 - **Search** — Search users, tweets, and hashtags
 - **Trending & Discovery** — Trending hashtags and suggested users
+- **Observability** — Real-time metrics (Prometheus) and log aggregation (Loki) via Grafana Cloud
 
 ## Architecture
 
@@ -25,6 +26,7 @@ Full-stack Twitter/X clone with a Next.js frontend, Go backend, and AWS infrastr
 | Frontend | Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query, Zustand |
 | Backend | Go, Gin, PostgreSQL + sqlc, Redis |
 | Infrastructure | AWS (Amplify, API Gateway, EC2, RDS, S3, CloudFront), Terraform, GitHub Actions |
+| Observability | Prometheus, Grafana, Loki (Grafana Cloud) |
 
 ## Prerequisites
 
@@ -36,12 +38,49 @@ Full-stack Twitter/X clone with a Next.js frontend, Go backend, and AWS infrastr
 | [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | AWS resource management & SSH tunneling |
 | [Terraform](https://developer.hashicorp.com/terraform/install) (v1.5+) | Infrastructure provisioning |
 | [Make](https://www.gnu.org/software/make/) | Running Go API tasks (migrations, etc.) |
+| [Google Cloud Console](https://console.cloud.google.com/) | Google OAuth 2.0 Client ID for authentication |
 
 **Install via Homebrew (macOS):**
 
 ```bash
 brew install go node docker awscli hashicorp/tap/terraform make
 ```
+
+## Third-Party Setup
+
+### 1. Google OAuth 2.0 Setup
+
+This project uses Google OAuth for authentication. You need to create a Client ID to allow users to sign in.
+
+1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2.  **Create a Project**: Click on the project dropdown and select "New Project".
+3.  **OAuth Consent Screen**:
+    - Go to "APIs & Services" > "OAuth consent screen".
+    - Select **External** and click "Create".
+    - Fill in the required App Information (App name, support email, developer email).
+    - Save and continue until the end.
+4.  **Create Credentials**:
+    - Go to "APIs & Services" > "Credentials".
+    - Click **+ Create Credentials** > **OAuth client ID**.
+    - Select **Web application** as the Application type.
+    - **Authorized JavaScript origins**:
+      - `http://localhost:3000` (Local)
+      - `https://main.<app-id>.amplifyapp.com` (Production - update after deployment)
+    - **Authorized redirect URIs**:
+      - `http://localhost:3000/api/auth/callback/google`
+5.  **Copy Client ID**: Save the **Client ID**. You will need this for your `.env` files and Terraform variables.
+
+### 2. Grafana Cloud Setup (Monitoring)
+
+This project supports centralized logging and metrics via [Grafana Cloud](https://grafana.com/products/cloud/) (Free Tier).
+
+1.  Sign up for a free account at [Grafana Cloud](https://grafana.com/).
+2.  In the Cloud Portal, find the **Prometheus** and **Loki** tiles.
+3.  Click **Send Logs** for Loki and **Send Metrics** for Prometheus to find your:
+    - **URL**
+    - **User ID**
+4.  Create an **Access Policy** (or API Token) with `metrics:write` and `logs:write` scopes.
+5.  Add these values to your `infra/terraform/terraform.tfvars` to enable automatic monitoring.
 
 ## Local Development
 
@@ -71,6 +110,23 @@ npm run dev
 Web: `http://localhost:3000`
 API: `http://localhost:8080`
 
+## Validation Commands
+
+Before pushing or deploying, ensure everything is correct:
+
+**Go API:**
+```bash
+cd twitter-go-api
+go test ./...
+```
+
+**Next.js Web:**
+```bash
+cd twitter-next-web
+npx tsc --noEmit
+npm run lint
+```
+
 ## AWS Infrastructure
 
 | Service | Purpose |
@@ -82,6 +138,7 @@ API: `http://localhost:8080`
 | **S3** | Media storage with presigned-URL uploads |
 | **CloudFront** | CDN for serving S3 media over HTTPS |
 | **SSM Parameter Store** | Securely manages, stores, and injects runtime configuration into the Go API |
+| **Grafana Alloy** | Efficient agent on EC2 for scraping metrics and forwarding logs to Grafana Cloud |
 | **Terraform** | Infrastructure as Code for all resources |
 | **GitHub Actions** | CI/CD pipeline pulling from GHCR and deploying via SSM Run Command |
 
@@ -112,6 +169,8 @@ terraform init
 terraform plan     # Review what will be created
 terraform apply    # Create all resources (~5 min)
 ```
+
+> **Tip:** Use `terraform output` to view your infrastructure details at any time—it is a safe, read-only command.
 
 To tear down all resources and **stop all AWS charges**:
 
@@ -165,7 +224,7 @@ The Go API is deployed via the [`deploy-go-api.yml`](.github/workflows/deploy-go
 Connect to the EC2 instance using **EC2 Instance Connect Endpoint** (no `.pem` key needed):
 
 ```bash
-aws ec2-instance-connect ssh --instance-id <INSTANCE_ID>
+aws ec2-instance-connect ssh --instance-id <INSTANCE_ID> --connection-type eice
 ```
 
 **Alternative (Web Portal):**
@@ -183,6 +242,7 @@ RDS is in a private subnet and cannot be accessed directly. Use the EC2 instance
 ```bash
 aws ec2-instance-connect ssh \
     --instance-id <INSTANCE_ID> \
+    --connection-type eice \
     --local-forwarding 5433:<RDS_ENDPOINT>:5432
 ```
 
@@ -202,24 +262,10 @@ This forwards your local port `5433` to RDS port `5432` through the EC2 instance
 > ```bash
 > aws ec2-instance-connect ssh \
 >     --instance-id <INSTANCE_ID> \
+>     --connection-type eice \
 >     --local-forwarding 5433:<RDS_ENDPOINT>:5432 \
 >     -- -N
 > ```
-
-## Validation Commands
-
-Go API:
-```bash
-cd twitter-go-api
-go test ./...
-```
-
-Next.js Web:
-```bash
-cd twitter-next-web
-npx tsc --noEmit
-npm run lint
-```
 
 ## Project Structure
 
@@ -229,7 +275,7 @@ npm run lint
 ├── twitter-java-api/    # Java backend (legacy/alternative)
 ├── infra/
 │   ├── terraform/       # AWS infrastructure (Terraform)
-│   └── ec2/             # EC2 setup scripts & docker-compose
+│   └── ec2/             # EC2 setup scripts, docker-compose, and Alloy config
 ├── docs/
 │   └── assets/          # Architecture diagrams
 └── .github/workflows/   # CI/CD pipelines

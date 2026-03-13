@@ -37,3 +37,11 @@ gh_token = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
 # db_max_conns = "25"
 # max_media_bytes = "104857600"
 # redis_address = ""
+
+# ── Grafana Cloud Monitoring (Optional) ───────────────
+# Get these values from your Grafana Cloud portal
+# grafana_cloud_prometheus_url  = "https://prometheus-prod-01-...-remote-write"
+# grafana_cloud_prometheus_user = "12345"
+# grafana_cloud_loki_url        = "https://logs-prod-01-...-loki.grafana.net/loki/api/v1/push"
+# grafana_cloud_loki_user       = "67890"
+# grafana_cloud_api_token       = "glc_..."

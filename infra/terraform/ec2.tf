@@ -87,8 +87,22 @@ resource "aws_instance" "api" {
     
     # Write docker-compose.yml
     cat << 'DOCKER_COMPOSE_EOF' > /home/ec2-user/app/docker-compose.yml
-    ${templatefile("${path.module}/../ec2/docker-compose.yml", { AWS_REGION = var.aws_region })}
+    ${templatefile("${path.module}/../ec2/docker-compose.yml", { 
+      AWS_REGION         = var.aws_region,
+      MONITORING_PROFILE = var.grafana_cloud_api_token != "" ? "default" : "monitoring-disabled"
+    })}
     DOCKER_COMPOSE_EOF
+
+    # Write config.alloy
+    cat << 'ALLOY_EOF' > /home/ec2-user/app/config.alloy
+    ${templatefile("${path.module}/../ec2/config.alloy", {
+      PROMETHEUS_URL  = var.grafana_cloud_prometheus_url,
+      PROMETHEUS_USER = var.grafana_cloud_prometheus_user,
+      LOKI_URL        = var.grafana_cloud_loki_url,
+      LOKI_USER       = var.grafana_cloud_loki_user,
+      API_TOKEN       = var.grafana_cloud_api_token
+    })}
+    ALLOY_EOF
     
     # Execute setup script
     ${file("${path.module}/../ec2/setup-ec2.sh")}
@@ -109,8 +123,9 @@ resource "aws_instance" "api" {
 # ── EC2 Instance Connect Endpoint ───────────────────
 
 resource "aws_ec2_instance_connect_endpoint" "this" {
-  subnet_id          = aws_subnet.public_1.id
-  security_group_ids = [aws_security_group.eice.id]
+  subnet_id            = aws_subnet.public_1.id
+  security_group_ids   = [aws_security_group.eice.id]
+  preserve_client_ip   = false
 
   tags = { Name = "${var.project_name}-eice" }
 }

@@ -94,7 +94,7 @@ func LoadConfig(path string) (config Config, err error) {
 	}
 
 	if configLoadedSuccessfully {
-		fmt.Printf("✅ Metadata: Configuration loaded from AWS SSM (Region: %s, Prefix: %s)\n", os.Getenv("AWS_REGION"), "/chmtwt/prod/")
+		fmt.Printf("Metadata: Configuration loaded from AWS SSM (Region: %s, Prefix: %s)\n", os.Getenv("AWS_REGION"), "/chmtwt/prod/")
 	}
 
 	err = viper.Unmarshal(&config)
@@ -114,7 +114,7 @@ func loadFromSSM() {
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(), opts...)
 	if err != nil {
-		fmt.Printf("❌ Error: Unable to initialize AWS SDK: %v (Is AWS_REGION set?)\n", err)
+		fmt.Printf("Error: Unable to initialize AWS SDK: %v (Is AWS_REGION set?)\n", err)
 		return
 	}
 
@@ -128,7 +128,7 @@ func loadFromSSM() {
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(context.TODO())
 		if err != nil {
-			fmt.Printf("❌ Error: Failed to fetch parameters from SSM at %s: %v\n", prefix, err)
+			fmt.Printf("Error: Failed to fetch parameters from SSM at %s: %v\n", prefix, err)
 			return
 		}
 		for _, p := range page.Parameters {
