@@ -235,6 +235,26 @@ aws ec2-instance-connect ssh --instance-id <INSTANCE_ID> --connection-type eice
 5. **EC2 Instance Connect Endpoint**: Select your endpoint from the dropdown (e.g., `eice-xxxx...`)
 6. Click **Connect** to open a terminal in your browser.
 
+### Monitoring Startup Logs (Initialization)
+
+When Terraform creates an EC2 instance, it is only "hardware-ready." It takes an additional 2-3 minutes for the software (Docker, API, Monitoring) to finish installing and starting up.
+
+To watch the progress of your startup scripts in real-time:
+
+1. SSH into the instance (as shown above).
+2. Run this command to follow the initialization logs:
+
+```bash
+tail -f /var/log/cloud-init-output.log
+```
+
+**Common "Early-login" Errors:**
+* `docker: command not found` — The dnf installer is still running.
+* `Cannot connect to Docker daemon` — Docker service is still booting.
+* `No data` in Grafana — The monitoring agent hasn't reached the "Loki" setup step yet.
+
+Once you see the "✅ Setup Complete!" message in the log, your server is 100% ready.
+
 ### Connect to RDS (via SSH tunnel)
 
 RDS is in a private subnet and cannot be accessed directly. Use the EC2 instance as a bastion host to create an SSH tunnel:

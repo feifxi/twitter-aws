@@ -80,6 +80,8 @@ resource "aws_instance" "api" {
 
   tags = { Name = "${var.project_name}-ec2" }
 
+  user_data_replace_on_change = true
+
   user_data = <<-EOF
     #!/bin/bash
     # Create app directory
@@ -87,21 +89,21 @@ resource "aws_instance" "api" {
     
     # Write docker-compose.yml
     cat << 'DOCKER_COMPOSE_EOF' > /home/ec2-user/app/docker-compose.yml
-    ${templatefile("${path.module}/../ec2/docker-compose.yml", { 
-      AWS_REGION         = var.aws_region,
-      MONITORING_PROFILE = var.grafana_cloud_api_token != "" ? "default" : "monitoring-disabled"
-    })}
+    ${templatefile("${path.module}/../ec2/docker-compose.yml.tftpl", {
+  AWS_REGION        = var.aws_region,
+  ENABLE_MONITORING = var.grafana_cloud_api_token != ""
+  })}
     DOCKER_COMPOSE_EOF
 
     # Write config.alloy
     cat << 'ALLOY_EOF' > /home/ec2-user/app/config.alloy
-    ${templatefile("${path.module}/../ec2/config.alloy", {
-      PROMETHEUS_URL  = var.grafana_cloud_prometheus_url,
-      PROMETHEUS_USER = var.grafana_cloud_prometheus_user,
-      LOKI_URL        = var.grafana_cloud_loki_url,
-      LOKI_USER       = var.grafana_cloud_loki_user,
-      API_TOKEN       = var.grafana_cloud_api_token
-    })}
+    ${templatefile("${path.module}/../ec2/config.alloy.tftpl", {
+  PROMETHEUS_URL  = var.grafana_cloud_prometheus_url != "" ? var.grafana_cloud_prometheus_url : "N/A",
+  PROMETHEUS_USER = var.grafana_cloud_prometheus_user != "" ? var.grafana_cloud_prometheus_user : "N/A",
+  LOKI_URL        = var.grafana_cloud_loki_url != "" ? var.grafana_cloud_loki_url : "N/A",
+  LOKI_USER       = var.grafana_cloud_loki_user != "" ? var.grafana_cloud_loki_user : "N/A",
+  API_TOKEN       = var.grafana_cloud_api_token != "" ? var.grafana_cloud_api_token : "N/A"
+})}
     ALLOY_EOF
     
     # Execute setup script
@@ -118,14 +120,19 @@ resource "aws_instance" "api" {
     cd /home/ec2-user/app
     docker compose up -d || echo "⚠️ First pull failed (likely private repo or build in progress). Waiting for first GitHub Action deployment..."
   EOF
+
+depends_on = [
+  aws_db_instance.this,
+  aws_ssm_parameter.config
+]
 }
 
 # ── EC2 Instance Connect Endpoint ───────────────────
 
 resource "aws_ec2_instance_connect_endpoint" "this" {
-  subnet_id            = aws_subnet.public_1.id
-  security_group_ids   = [aws_security_group.eice.id]
-  preserve_client_ip   = false
+  subnet_id          = aws_subnet.public_1.id
+  security_group_ids = [aws_security_group.eice.id]
+  preserve_client_ip = false
 
   tags = { Name = "${var.project_name}-eice" }
 }

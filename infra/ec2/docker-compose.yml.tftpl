@@ -15,11 +15,12 @@ services:
         max-size: "10m"
         max-file: "3"
 
+%{~ if ENABLE_MONITORING ~}
   # Grafana Alloy (Monitoring Agent)
-  # Only starts if ENABLE_MONITORING is true
   alloy:
     image: grafana/alloy:latest
     container_name: grafana-alloy
+    user: root
     volumes:
       - ./config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -27,5 +28,4 @@ services:
     restart: unless-stopped
     depends_on:
       - api
-    profiles:
-      - ${MONITORING_PROFILE}
+%{~ endif ~}
