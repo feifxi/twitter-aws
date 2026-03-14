@@ -26,7 +26,7 @@ Full-stack Twitter/X clone with a Next.js frontend, Go backend, and production-r
 | Frontend | Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query, Zustand |
 | Backend | Go, Gin, PostgreSQL + sqlc, Redis |
 | Infrastructure | AWS (Amplify, API Gateway, EC2, RDS, S3, CloudFront), Terraform, GitHub Actions |
-| Observability | **Grafana Cloud** (Loki, Prometheus), **Grafana Alloy**, **Node Exporter** |
+| Observability | Grafana Cloud (Loki, Prometheus), Grafana Alloy, Node Exporter |
 
 ## Architecture
 
@@ -232,14 +232,14 @@ The Go API is deployed via the [`deploy-go-api.yml`](.github/workflows/deploy-go
 
 ### SSH into EC2
 
-Connect to the EC2 instance using **EC2 Instance Connect Endpoint** (no `.pem` key needed):
+Connect to the EC2 instance using the **EC2 Instance Connect Endpoint** (no `.pem` key needed):
 
 ```bash
-aws ec2-instance-connect ssh --instance-id <INSTANCE_ID> --connection-type eice
+aws ec2-instance-connect ssh --instance-id [INSTANCE_ID] --connection-type eice
 ```
 
 **Alternative (Web Portal):**
-1. Go to **AWS Console** → **EC2** → **Instances**
+1. Go to **AWS Console** &rarr; **EC2** &rarr; **Instances**
 2. Select your instance and click **Connect**
 3. Select the **EC2 Instance Connect** tab
 4. **Connection Type**: Select **"Connect using a Private IP"**
@@ -248,50 +248,50 @@ aws ec2-instance-connect ssh --instance-id <INSTANCE_ID> --connection-type eice
 
 ### Monitoring Startup Logs (Initialization)
 
-When Terraform creates an EC2 instance, it is only "hardware-ready." It takes an additional 2-3 minutes for the software (Docker, API, Monitoring) to finish installing and starting up.
+When Terraform creates an EC2 instance, it is initially only "hardware-ready." It takes an additional 2-3 minutes for the software (Docker, API, monitoring agents) to finish installing and starting up.
 
 To watch the progress of your startup scripts in real-time:
 
-1. SSH into the instance (as shown above).
+1. **SSH into the instance** (as shown above).
 2. Run this command to follow the initialization logs:
 
 ```bash
 tail -f /var/log/cloud-init-output.log
 ```
 
-**Common "Early-login" Errors:**
-* `docker: command not found` — The dnf installer is still running.
-* `Cannot connect to Docker daemon` — Docker service is still booting.
-* `No data` in Grafana — The monitoring agent hasn't reached the "Loki" setup step yet.
+**Common "Early-login" Issues:**
+* `docker: command not found` &rarr; The installer is still running.
+* `Cannot connect to Docker daemon` &rarr; Docker service is still booting.
+* `No data` in Grafana &rarr; The monitoring agent hasn't reached the configuration step yet.
 
-Once you see the "✅ Setup Complete!" message in the log, your server is 100% ready.
+Once you see the **"✅ Setup Complete!"** message in the log, your server is 100% ready.
 
 ### Troubleshooting SSH & RDS Connections
 
-If you see the error **`WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!`** when connecting/tunneling, it is because the EC2 instance was recreated but is reusing an old IP address.
+If you see the error **`WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!`** when connecting or tunneling, the EC2 instance has been recreated and is reusing a previously known IP address.
 
 **The Fix:**
-Run this command to clear the stale host key from your computer:
+Clear the stale host key from your local `known_hosts` file:
 
 ```bash
-ssh-keygen -R <INSTANCE_IP>
+ssh-keygen -R [INSTANCE_IP]
 # Example: ssh-keygen -R 10.0.0.82
 ```
 
-After running this, try the `aws ec2-instance-connect ssh` command again. You will be asked to confirm the new key; type **"yes"**.
+After running this, re-run the `aws ec2-instance-connect ssh` command and type **"yes"** when prompted to confirm the new key.
 
 ### Connect to RDS (via SSH tunnel)
 
-RDS is in a private subnet and cannot be accessed directly. Use the EC2 instance as a bastion host to create an SSH tunnel:
+RDS is located in a private subnet and cannot be accessed directly. Use the EC2 instance as a bastion host to create a secure SSH tunnel:
 
 ```bash
 aws ec2-instance-connect ssh \
-    --instance-id <INSTANCE_ID> \
+    --instance-id [INSTANCE_ID] \
     --connection-type eice \
-    --local-forwarding 5433:<RDS_ENDPOINT>:5432
+    --local-forwarding 5433:[RDS_ENDPOINT]:5432
 ```
 
-This forwards your local port `5433` to RDS port `5432` through the EC2 instance. Port `5433` is used to avoid conflicts with any local PostgreSQL running on `5432`.
+This forwards your local port `5433` to RDS port `5432` through the EC2 instance. Port `5433` is used to avoid conflicts with any local PostgreSQL instance running on `5432`.
 
 **Keep the terminal window open**, then connect with your database tool (DBeaver, TablePlus, etc.):
 
@@ -303,12 +303,13 @@ This forwards your local port `5433` to RDS port `5432` through the EC2 instance
 | Username | _(from `terraform.tfvars`)_ |
 | Password | _(from `terraform.tfvars`)_ |
 
-> **Tip:** Add `-- -N` at the end to open the tunnel without dropping into the EC2 shell:
+> [!TIP]
+> Add `-- -N` at the end to open the tunnel in the background without dropping into the EC2 shell:
 > ```bash
 > aws ec2-instance-connect ssh \
->     --instance-id <INSTANCE_ID> \
+>     --instance-id [INSTANCE_ID] \
 >     --connection-type eice \
->     --local-forwarding 5433:<RDS_ENDPOINT>:5432 \
+>     --local-forwarding 5433:[RDS_ENDPOINT]:5432 \
 >     -- -N
 > ```
 
