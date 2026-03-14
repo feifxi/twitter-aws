@@ -50,26 +50,38 @@ export default function MessagesPage() {
   const [messageInput, setMessageInput] = useState('');
   const [hasHydrated, setHasHydrated] = useState(false);
 
-  // Restore activeChat from sessionStorage on mount
+  // Restore activeChat from sessionStorage on mount when user is loaded
   useEffect(() => {
-    const savedChat = sessionStorage.getItem('twitter-clone-active-chat');
+    if (!user?.id || hasHydrated) return;
+    
+    // Clean up old generic key if it exists
+    sessionStorage.removeItem('twitter-clone-active-chat');
+
+    const key = `twitter-clone-active-chat-${user.id}`;
+    const savedChat = sessionStorage.getItem(key);
     if (savedChat) {
       try {
         const parsed = JSON.parse(savedChat);
-        setTimeout(() => setActiveChat(parsed), 0);
+        setActiveChat(parsed);
       } catch (e) {
         console.error('Failed to parse activeChat from sessionStorage', e);
       }
     }
-    setTimeout(() => setHasHydrated(true), 0);
-  }, []);
+    setHasHydrated(true);
+  }, [user?.id, hasHydrated]);
 
   // Save activeChat to sessionStorage when it changes
   useEffect(() => {
-    if (hasHydrated) {
-      sessionStorage.setItem('twitter-clone-active-chat', JSON.stringify(activeChat));
+    if (hasHydrated && user?.id) {
+      const key = `twitter-clone-active-chat-${user.id}`;
+      if (activeChat) {
+        sessionStorage.setItem(key, JSON.stringify(activeChat));
+      } else {
+        sessionStorage.removeItem(key);
+      }
     }
-  }, [activeChat, hasHydrated]);
+  }, [activeChat, hasHydrated, user?.id]);
+
   
   // New Message Modal State
   const [isNewMessageOpen, setIsNewMessageOpen] = useState(false);
@@ -153,6 +165,17 @@ export default function MessagesPage() {
   }, [activeChat, dmFetchNextPage]);
 
   const currentPrivateConversation = conversations.find((c) => c.id === privateId);
+
+  // Validate restored chat belongs to user once conversations are loaded
+  useEffect(() => {
+    if (isLoggedIn && !conversationsLoading && activeChat?.type === 'private' && conversations.length > 0) {
+      const exists = conversations.some(c => c.id === activeChat.id);
+      if (!exists) {
+        console.warn('Restored chat no longer exists or belongs to another user. Clearing.');
+        setActiveChat(null);
+      }
+    }
+  }, [isLoggedIn, conversationsLoading, conversations, activeChat]);
 
   // Auto-scroll to bottom when chat changes or new messages arrive
   const activeChatKey = activeChat ? (activeChat.type === 'private' ? `private-${activeChat.id}` : `new-${activeChat.user.id}`) : '';
@@ -391,107 +414,140 @@ export default function MessagesPage() {
 
       {/* Main Thread View */}
       <div className={`flex-1 flex flex-col min-w-0 ${activeChat ? 'flex' : 'hidden md:flex'}`}>
-        {/* Thread Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10">
-            <div className="flex items-center gap-3 min-w-0">
-              {/* Back button on mobile */}
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="md:hidden -ml-2 rounded-full shrink-0"
-                onClick={() => setActiveChat(null)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><g><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"></path></g></svg>
-              </Button>
+        {activeChat ? (
+          <>
+            {/* Thread Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="md:hidden -ml-2 rounded-full shrink-0"
+                    onClick={() => setActiveChat(null)}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><g><path d="M7.414 13l5.043 5.04-1.414 1.42L3.586 12l7.457-7.46 1.414 1.42L7.414 11H21v2H7.414z"></path></g></svg>
+                  </Button>
+                  
+                  {activeChat.type === 'new_private' ? (
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-[17px] text-foreground truncate">{activeChat.user.displayName || activeChat.user.username}</span>
+                      <span className="text-[13px] text-muted-foreground truncate">@{activeChat.user.username}</span>
+                    </div>
+                  ) : currentPrivateConversation ? (
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-[17px] text-foreground truncate">{currentPrivateConversation.peer.displayName || currentPrivateConversation.peer.username}</span>
+                      <span className="text-[13px] text-muted-foreground truncate">@{currentPrivateConversation.peer.username}</span>
+                    </div>
+                  ) : null}
+                </div>
+            </div>
+
+            {/* Thread Messages */}
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto p-4 flex flex-col gap-3"
+            >
+              <div ref={topSentinelRef} className="h-1 shrink-0" />
               
-              {activeChat?.type === 'new_private' ? (
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-[17px] text-foreground truncate">{activeChat.user.displayName || activeChat.user.username}</span>
-                  <span className="text-[13px] text-muted-foreground truncate">@{activeChat.user.username}</span>
+              {isFetchingNextPage && (
+                <div className="text-muted-foreground text-center text-sm py-2">Loading older messages...</div>
+              )}
+              
+              {isLoadingMessages && activeChat.type !== 'new_private' && (
+                <div className="text-muted-foreground text-center flex-1 flex items-center justify-center">Loading messages...</div>
+              )}
+              
+              {(!isLoadingMessages || activeChat.type === 'new_private') && messagesData.length === 0 && (
+                <div className="text-muted-foreground text-center flex-1 flex items-center justify-center">
+                   <div className="max-w-xs px-4">
+                      <p className="text-2xl font-bold mb-2">No messages here yet...</p>
+                      <p className="text-muted-foreground text-sm">Send a message to start the conversation.</p>
+                   </div>
                 </div>
-              ) : currentPrivateConversation ? (
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-[17px] text-foreground truncate">{currentPrivateConversation.peer.displayName || currentPrivateConversation.peer.username}</span>
-                  <span className="text-[13px] text-muted-foreground truncate">@{currentPrivateConversation.peer.username}</span>
-                </div>
-              ) : <div />}
+              )}
+              
+              {activeChat.type !== 'new_private' && messagesData.map((message) => {
+                const isMine = isLoggedIn && message.sender.id === user?.id;
+                return (
+                  <div key={message.id} className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMine ? 'self-end items-end' : 'self-start items-start'}`}>
+                    <div
+                      className={`px-4 py-3 rounded-2xl text-[15px] border overflow-wrap-anywhere ${
+                        isMine
+                          ? 'bg-primary text-primary-foreground border-primary rounded-br-none'
+                          : 'bg-card text-foreground border-border rounded-bl-none'
+                      }`}
+                    >
+                      {message.content}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1 px-1">
+                      {formatRelativeTime(message.createdAt)}
+                    </div>
+                  </div>
+                );
+              })}
+              
+              <div ref={messagesEndRef} className="h-0 shrink-0" />
             </div>
-        </div>
 
-        {/* Thread Messages */}
-        <div 
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto p-4 flex flex-col gap-3"
-        >
-          {/* Top sentinel for infinite scroll up */}
-          <div ref={topSentinelRef} className="h-1 shrink-0" />
-          
-          {isFetchingNextPage && (
-            <div className="text-muted-foreground text-center text-sm py-2">Loading older messages...</div>
-          )}
-          
-          {isLoadingMessages && activeChat?.type !== 'new_private' && (
-            <div className="text-muted-foreground text-center flex-1 flex items-center justify-center">Loading messages...</div>
-          )}
-          
-          {(!isLoadingMessages || activeChat?.type === 'new_private') && messagesData.length === 0 && (
-            <div className="text-muted-foreground text-center flex-1 flex items-center justify-center">Start the conversation.</div>
-          )}
-          
-          {activeChat?.type !== 'new_private' && messagesData.map((message) => {
-            const isMine = isLoggedIn && message.sender.id === user?.id;
-            return (
-              <div key={message.id} className={`max-w-[85%] md:max-w-[75%] flex flex-col ${isMine ? 'self-end items-end' : 'self-start items-start'}`}>
-                <div
-                  className={`px-4 py-3 rounded-2xl text-[15px] border break-words ${
-                    isMine
-                      ? 'bg-primary text-primary-foreground border-primary rounded-br-none'
-                      : 'bg-card text-foreground border-border rounded-bl-none'
-                  }`}
-                >
-                  {message.content}
+            {/* Thread Input */}
+            <div className="p-3 border-t border-border bg-background">
+                 <div className="bg-card rounded-2xl flex items-center px-2 py-1">
+                    <Input 
+                      ref={messageInputRef}
+                      placeholder="Start a new message" 
+                      className="flex-1 border-none bg-transparent focus-visible:ring-0 text-foreground placeholder-muted-foreground text-[15px]" 
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                      disabled={sendDMMutation.isPending || startPrivateChatMutation.isPending}
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className={`rounded-full w-9 h-9 transition-colors ${messageInput.trim() ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground cursor-default hover:bg-transparent'}`}
+                      onClick={handleSendMessage}
+                      disabled={!messageInput.trim() || sendDMMutation.isPending || startPrivateChatMutation.isPending}
+                    >
+                      <Send className="w-5 h-5" />
+                    </Button>
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-1 px-1">
-                  {formatRelativeTime(message.createdAt)}
-                </div>
-              </div>
-            );
-          })}
-          
-          {/* Bottom anchor for auto-scroll */}
-          <div ref={messagesEndRef} className="h-0 shrink-0" />
-        </div>
-
-        {/* Thread Input */}
-        <div className="p-3 border-t border-border bg-background">
-          {activeChat ? (
-             <div className="bg-card rounded-2xl flex items-center px-2 py-1">
-                <Input 
-                  ref={messageInputRef}
-                  placeholder="Start a new message" 
-                  className="flex-1 border-none bg-transparent focus-visible:ring-0 text-foreground placeholder-muted-foreground text-[15px]" 
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                  disabled={sendDMMutation.isPending || startPrivateChatMutation.isPending}
-                />
+            </div>
+          </>
+        ) : (
+          <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-background px-4">
+            <div className="max-w-[340px] text-left">
+              <h2 className="text-3xl font-bold text-foreground mb-2">
+                {isLoggedIn 
+                  ? (conversations.length > 0 ? "Select a message" : "Welcome to your inbox!")
+                  : "Welcome to your inbox!"}
+              </h2>
+              <p className="text-muted-foreground text-[15px] mb-6">
+                {isLoggedIn
+                  ? (conversations.length > 0 
+                      ? "Choose from your existing conversations, start a new one, or just keep swimming." 
+                      : "Drop a line, share a Tweet, or more with private conversations between you and others on Twitter.")
+                  : "Drop a line, share a Tweet, or more with private conversations between you and others on Twitter."}
+              </p>
+              {isLoggedIn ? (
+                conversations.length === 0 && (
+                  <Button 
+                    className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-6 py-6 h-auto text-base"
+                    onClick={() => setIsNewMessageOpen(true)}
+                  >
+                    Write a message
+                  </Button>
+                )
+              ) : (
                 <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className={`rounded-full w-9 h-9 transition-colors ${messageInput.trim() ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground cursor-default hover:bg-transparent'}`}
-                  onClick={handleSendMessage}
-                  disabled={!messageInput.trim() || sendDMMutation.isPending || startPrivateChatMutation.isPending}
+                  className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-6 py-6 h-auto text-base"
+                  onClick={() => {/* Trigger login modal if exists */}}
                 >
-                  <Send className="w-5 h-5" />
+                  Log in
                 </Button>
+              )}
             </div>
-          ) : (
-            <div className="bg-muted rounded-2xl p-4 text-center">
-             <p className="text-foreground font-semibold mb-2">Private Messages</p>
-             <p className="text-muted-foreground text-sm">Select a conversation or start a new one.</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

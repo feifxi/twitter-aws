@@ -29,6 +29,7 @@ type userResponse struct {
 	DisplayName    *string `json:"displayName"`
 	Bio            *string `json:"bio"`
 	AvatarUrl      *string `json:"avatarUrl"`
+	BannerUrl      *string `json:"bannerUrl"`
 	IsFollowing    bool    `json:"isFollowing"`
 	FollowersCount int32   `json:"followersCount"`
 	FollowingCount int32   `json:"followingCount"`
@@ -42,6 +43,7 @@ func newUserResponse(user usecase.UserItem) userResponse {
 		DisplayName:    user.DisplayName,
 		Bio:            user.Bio,
 		AvatarUrl:      user.AvatarUrl,
+		BannerUrl:      user.BannerUrl,
 		IsFollowing:    user.IsFollowing,
 		FollowersCount: user.FollowersCount,
 		FollowingCount: user.FollowingCount,

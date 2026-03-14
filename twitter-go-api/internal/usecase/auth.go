@@ -48,6 +48,7 @@ func (u *AuthUsecase) LoginWithGoogle(ctx context.Context, idToken string) (Auth
 			Email:       email,
 			DisplayName: &name,
 			AvatarUrl:   &picture,
+			BannerUrl:   nil,
 			Role:        RoleUser,
 			Provider:    "GOOGLE",
 		})

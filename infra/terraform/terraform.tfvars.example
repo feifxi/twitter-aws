@@ -36,6 +36,7 @@ gh_token = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
 # ── Optional Overrides (Defaults are in variables.tf) ──
 # db_max_conns = "25"
 # max_media_bytes = "104857600"
+# max_banner_bytes = "104857600"
 # redis_address = ""
 
 # ── Grafana Cloud Monitoring (Optional) ───────────────

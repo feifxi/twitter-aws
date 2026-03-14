@@ -41,12 +41,19 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
 
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
-  const previewUrl = avatarPreviewUrl ?? user.avatarUrl ?? null;
+  const [avatarDeleted, setAvatarDeleted] = useState(false);
+  const previewUrl = avatarPreviewUrl ?? (avatarDeleted ? null : user.avatarUrl) ?? null;
+
+  const [banner, setBanner] = useState<File | null>(null);
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
+  const [bannerDeleted, setBannerDeleted] = useState(false);
+  const bannerUrl = bannerPreviewUrl ?? (bannerDeleted ? null : user.bannerUrl) ?? null;
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const updateMutation = useUpdateProfile();
 
-  const hasChanges = isDirty || avatar !== null;
+  const hasChanges = isDirty || avatar !== null || banner !== null;
 
   useEffect(() => {
     if (isOpen) {
@@ -54,6 +61,12 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
         displayName: user.displayName || '',
         bio: user.bio || '',
       });
+      setAvatar(null);
+      setAvatarPreviewUrl(null);
+      setAvatarDeleted(false);
+      setBanner(null);
+      setBannerPreviewUrl(null);
+      setBannerDeleted(false);
     }
   }, [isOpen, user, reset]);
 
@@ -61,9 +74,22 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
     const file = e.target.files?.[0];
     if (file) {
       setAvatar(file);
+      setAvatarDeleted(false);
       const url = URL.createObjectURL(file);
       setAvatarPreviewUrl(url);
     }
+    e.target.value = '';
+  };
+
+  const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBanner(file);
+      setBannerDeleted(false);
+      const url = URL.createObjectURL(file);
+      setBannerPreviewUrl(url);
+    }
+    e.target.value = '';
   };
 
   const handleClose = () => {
@@ -73,6 +99,10 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
     });
     setAvatar(null);
     setAvatarPreviewUrl(null);
+    setAvatarDeleted(false);
+    setBanner(null);
+    setBannerPreviewUrl(null);
+    setBannerDeleted(false);
     onClose();
   };
 
@@ -82,6 +112,9 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
         displayName: data.displayName || '',
         bio: data.bio || '',
         avatar: avatar ?? undefined,
+        banner: banner ?? undefined,
+        removeAvatar: avatarDeleted,
+        removeBanner: bannerDeleted,
       });
       
       // Update global auth store if we're editing our own profile
@@ -116,7 +149,7 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
             </div>
             <Button
                 onClick={handleSubmit(onSubmit)}
-                disabled={!displayName.trim() || updateMutation.isPending || !hasChanges || !isValid}
+                disabled={!displayName.trim() || updateMutation.isPending || (!hasChanges && !avatarDeleted && !bannerDeleted) || !isValid}
                 className="rounded-full bg-foreground text-background hover:bg-foreground/90 h-[32px] font-bold text-[14px] px-4"
             >
                 {updateMutation.isPending ? 'Saving...' : 'Save'}
@@ -125,8 +158,38 @@ export function EditProfileModal({ user, isOpen, onClose }: EditProfileModalProp
 
         {/* Content */}
         <div className="p-4 flex flex-col gap-6">
-            {/* Banner (Placeholder) */}
+            {/* Banner */}
             <div className="h-[200px] bg-secondary -mt-4 -mx-4 mb-10 relative">
+                {bannerUrl && (
+                    <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+                )}
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-3 opacity-100 transition-opacity">
+                    <div 
+                        className="p-3 rounded-full bg-black/40 hover:bg-black/60 transition-colors cursor-pointer"
+                        onClick={() => bannerInputRef.current?.click()}
+                    >
+                        <Camera className="w-6 h-6 text-white" />
+                    </div>
+                    {bannerUrl && (
+                        <div 
+                            className="p-3 rounded-full bg-black/40 hover:bg-black/60 transition-colors cursor-pointer"
+                            onClick={() => {
+                                setBanner(null);
+                                setBannerPreviewUrl(null);
+                                setBannerDeleted(true);
+                            }}
+                        >
+                            <X className="w-6 h-6 text-white" />
+                        </div>
+                    )}
+                </div>
+                <input
+                    type="file"
+                    ref={bannerInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleBannerChange}
+                />
                 {/* Avatar Overlay */}
                 <div className="absolute -bottom-[40px] left-4">
                      <div className="w-[112px] h-[112px] rounded-full border-4 border-background bg-card relative overflow-hidden group">

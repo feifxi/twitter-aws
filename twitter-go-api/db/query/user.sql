@@ -1,8 +1,8 @@
 -- name: CreateUser :one
 INSERT INTO users (
-  username, email, display_name, bio, avatar_url, role, provider
+  username, email, display_name, bio, avatar_url, banner_url, role, provider
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7
+  $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
 
@@ -26,6 +26,7 @@ SET
   bio = $2,
   display_name = $3,
   avatar_url = $4,
+  banner_url = $5,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;

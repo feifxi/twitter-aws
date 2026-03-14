@@ -92,6 +92,12 @@ variable "max_avatar_bytes" {
   default     = "5242880" # 5 MB
 }
 
+variable "max_banner_bytes" {
+  description = "Maximum size in bytes for banner uploads"
+  type        = string
+  default     = "104857600" # 100 MB
+}
+
 variable "cookie_domain" {
   description = "Domain for authentication cookies (leave empty for localhost)"
   type        = string

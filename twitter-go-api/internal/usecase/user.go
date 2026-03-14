@@ -10,6 +10,7 @@ type UpdateProfileInput struct {
 	Bio         *string
 	DisplayName *string
 	AvatarKey   *string // S3 object key (uploaded elsewhere)
+	BannerKey   *string // S3 object key
 }
 
 func (u *UserUsecase) GetUser(ctx context.Context, targetUserID int64, viewerID *int64) (UserItem, error) {
@@ -28,9 +29,23 @@ func (u *UserUsecase) UpdateProfile(ctx context.Context, userID int64, input Upd
 	}
 
 	newAvatar := existingUser.User.AvatarUrl
-	if input.AvatarKey != nil && *input.AvatarKey != "" {
-		url := u.storage.PublicURL(*input.AvatarKey)
-		newAvatar = &url
+	if input.AvatarKey != nil {
+		if *input.AvatarKey == "" {
+			newAvatar = nil
+		} else {
+			url := u.storage.PublicURL(*input.AvatarKey)
+			newAvatar = &url
+		}
+	}
+
+	newBanner := existingUser.User.BannerUrl
+	if input.BannerKey != nil {
+		if *input.BannerKey == "" {
+			newBanner = nil
+		} else {
+			url := u.storage.PublicURL(*input.BannerKey)
+			newBanner = &url
+		}
 	}
 
 	bio := existingUser.User.Bio
@@ -48,10 +63,14 @@ func (u *UserUsecase) UpdateProfile(ctx context.Context, userID int64, input Upd
 		Bio:         bio,
 		DisplayName: displayName,
 		AvatarUrl:   newAvatar,
+		BannerUrl:   newBanner,
 	})
 	if err != nil {
 		if input.AvatarKey != nil {
 			_ = u.storage.DeleteFile(ctx, *input.AvatarKey)
+		}
+		if input.BannerKey != nil {
+			_ = u.storage.DeleteFile(ctx, *input.BannerKey)
 		}
 		return UserItem{}, err
 	}
@@ -59,6 +78,11 @@ func (u *UserUsecase) UpdateProfile(ctx context.Context, userID int64, input Upd
 	// Clean up old avatar if we just replaced it
 	if input.AvatarKey != nil && existingUser.User.AvatarUrl != nil {
 		_ = u.storage.DeleteFile(ctx, *existingUser.User.AvatarUrl)
+	}
+
+	// Clean up old banner if we just replaced it
+	if input.BannerKey != nil && existingUser.User.BannerUrl != nil {
+		_ = u.storage.DeleteFile(ctx, *existingUser.User.BannerUrl)
 	}
 
 	return newUserItemFromDB(updatedUser, false), nil

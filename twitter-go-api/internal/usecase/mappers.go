@@ -10,6 +10,7 @@ func newUserItemFromDB(user db.User, isFollowing bool) UserItem {
 		DisplayName:    user.DisplayName,
 		Bio:            user.Bio,
 		AvatarUrl:      user.AvatarUrl,
+		BannerUrl:      user.BannerUrl,
 		Role:           user.Role,
 		Provider:       user.Provider,
 		FollowersCount: user.FollowersCount,

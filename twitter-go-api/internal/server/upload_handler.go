@@ -21,6 +21,7 @@ var (
 	presignAllowedFolders = map[string]bool{
 		"tweets":  true,
 		"avatars": true,
+		"banners": true,
 	}
 )
 
@@ -78,6 +79,8 @@ func (server *Server) maxUploadSize(folder string) int64 {
 	switch folder {
 	case "avatars":
 		return server.config.MaxAvatarBytes
+	case "banners":
+		return server.config.MaxBannerBytes
 	case "tweets":
 		return server.config.MaxMediaBytes
 	default:

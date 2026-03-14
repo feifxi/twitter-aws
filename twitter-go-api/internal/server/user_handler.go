@@ -12,6 +12,7 @@ type updateProfileRequest struct {
 	DisplayName *string `json:"displayName" binding:"omitempty,max=30"`
 	Bio         *string `json:"bio" binding:"omitempty,max=160"`
 	AvatarKey   *string `json:"avatarKey" binding:"omitempty"`
+	BannerKey   *string `json:"bannerKey" binding:"omitempty"`
 }
 
 func (server *Server) updateProfile(ctx *gin.Context) {
@@ -30,6 +31,7 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 		DisplayName: req.DisplayName,
 		Bio:         req.Bio,
 		AvatarKey:   req.AvatarKey,
+		BannerKey:   req.BannerKey,
 	}
 
 	updatedUser, err := server.userUC.UpdateProfile(ctx, userID, input)

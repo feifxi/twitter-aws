@@ -20,6 +20,7 @@ type Config struct {
 	DBMaxConnLifetimeMinutes int    `mapstructure:"DB_MAX_CONN_LIFETIME_MINUTES"`
 	MaxMediaBytes            int64  `mapstructure:"MAX_MEDIA_BYTES"`
 	MaxAvatarBytes           int64  `mapstructure:"MAX_AVATAR_BYTES"`
+	MaxBannerBytes           int64  `mapstructure:"MAX_BANNER_BYTES"`
 	FrontendURL              string `mapstructure:"FRONTEND_URL"`
 	CookieDomain             string `mapstructure:"COOKIE_DOMAIN"`
 	CookieSameSite           string `mapstructure:"COOKIE_SAME_SITE"`
@@ -50,6 +51,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("DB_MAX_CONN_LIFETIME_MINUTES", 5)
 	viper.SetDefault("MAX_MEDIA_BYTES", int64(100<<20))  // 100 MiB
 	viper.SetDefault("MAX_AVATAR_BYTES", int64(5<<20))   // 5 MiB
+	viper.SetDefault("MAX_BANNER_BYTES", int64(10<<20))  // 10 MiB
 	// Explicitly bind environment variables so viper.Unmarshal detects them
 	// without needing a physical app.env file (which is excluded in CI/CD).
 	viper.BindEnv("ENVIRONMENT")
@@ -60,6 +62,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.BindEnv("DB_MAX_CONN_LIFETIME_MINUTES")
 	viper.BindEnv("MAX_MEDIA_BYTES")
 	viper.BindEnv("MAX_AVATAR_BYTES")
+	viper.BindEnv("MAX_BANNER_BYTES")
 	viper.BindEnv("FRONTEND_URL")
 	viper.BindEnv("COOKIE_DOMAIN")
 	viper.BindEnv("COOKIE_SAME_SITE")

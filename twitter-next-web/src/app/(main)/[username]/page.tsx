@@ -70,7 +70,11 @@ function ProfileContent({ params }: { params: Promise<{ username: string }> }) {
       </div>
 
       {/* Banner */}
-      <div className="h-[200px] bg-secondary w-full relative" />
+      <div className="h-[200px] bg-secondary w-full relative overflow-hidden">
+        {user.bannerUrl && (
+            <img src={user.bannerUrl} alt="" className="w-full h-full object-cover" />
+        )}
+      </div>
 
       {/* Profile Info Container */}
       <div className="px-4 pb-4">

@@ -9,7 +9,7 @@ import { axiosInstance } from './axiosInstance';
  */
 export async function uploadFileWithPresignedUrl(
   file: File,
-  folder: 'tweets' | 'avatars'
+  folder: 'tweets' | 'avatars' | 'banners'
 ): Promise<string> {
   // 1. Get presigned URL
   const { data } = await axiosInstance.post<{ presignedUrl: string; objectKey: string }>(

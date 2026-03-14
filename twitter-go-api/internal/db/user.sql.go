@@ -11,11 +11,11 @@ import (
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
-  username, email, display_name, bio, avatar_url, role, provider
+  username, email, display_name, bio, avatar_url, banner_url, role, provider
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7
+  $1, $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, username, email, display_name, bio, avatar_url, role, provider, followers_count, following_count, created_at, updated_at
+RETURNING id, username, email, display_name, bio, avatar_url, banner_url, role, provider, followers_count, following_count, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -24,6 +24,7 @@ type CreateUserParams struct {
 	DisplayName *string `json:"display_name"`
 	Bio         *string `json:"bio"`
 	AvatarUrl   *string `json:"avatar_url"`
+	BannerUrl   *string `json:"banner_url"`
 	Role        string  `json:"role"`
 	Provider    string  `json:"provider"`
 }
@@ -35,6 +36,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.DisplayName,
 		arg.Bio,
 		arg.AvatarUrl,
+		arg.BannerUrl,
 		arg.Role,
 		arg.Provider,
 	)
@@ -46,6 +48,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.DisplayName,
 		&i.Bio,
 		&i.AvatarUrl,
+		&i.BannerUrl,
 		&i.Role,
 		&i.Provider,
 		&i.FollowersCount,
@@ -57,7 +60,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getUser = `-- name: GetUser :one
-SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
+SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.banner_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = u.id AND f.follower_id = $2) AS is_following
 FROM users u
 WHERE u.id = $1 LIMIT 1
@@ -83,6 +86,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (GetUserRow, e
 		&i.User.DisplayName,
 		&i.User.Bio,
 		&i.User.AvatarUrl,
+		&i.User.BannerUrl,
 		&i.User.Role,
 		&i.User.Provider,
 		&i.User.FollowersCount,
@@ -95,7 +99,7 @@ func (q *Queries) GetUser(ctx context.Context, arg GetUserParams) (GetUserRow, e
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, display_name, bio, avatar_url, role, provider, followers_count, following_count, created_at, updated_at FROM users
+SELECT id, username, email, display_name, bio, avatar_url, banner_url, role, provider, followers_count, following_count, created_at, updated_at FROM users
 WHERE email = $1 LIMIT 1
 `
 
@@ -109,6 +113,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.DisplayName,
 		&i.Bio,
 		&i.AvatarUrl,
+		&i.BannerUrl,
 		&i.Role,
 		&i.Provider,
 		&i.FollowersCount,
@@ -120,7 +125,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, display_name, bio, avatar_url, role, provider, followers_count, following_count, created_at, updated_at FROM users
+SELECT id, username, email, display_name, bio, avatar_url, banner_url, role, provider, followers_count, following_count, created_at, updated_at FROM users
 WHERE username = $1 LIMIT 1
 `
 
@@ -134,6 +139,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.DisplayName,
 		&i.Bio,
 		&i.AvatarUrl,
+		&i.BannerUrl,
 		&i.Role,
 		&i.Provider,
 		&i.FollowersCount,
@@ -145,7 +151,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const getUsersByIDs = `-- name: GetUsersByIDs :many
-SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
+SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.banner_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = u.id AND f.follower_id = $1) AS is_following
 FROM users u
 WHERE u.id = ANY($2::bigint[])
@@ -177,6 +183,7 @@ func (q *Queries) GetUsersByIDs(ctx context.Context, arg GetUsersByIDsParams) ([
 			&i.User.DisplayName,
 			&i.User.Bio,
 			&i.User.AvatarUrl,
+			&i.User.BannerUrl,
 			&i.User.Role,
 			&i.User.Provider,
 			&i.User.FollowersCount,
@@ -214,7 +221,7 @@ func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (bool,
 }
 
 const listFollowersUsers = `-- name: ListFollowersUsers :many
-SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
+SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.banner_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
   EXISTS(SELECT 1 FROM follows f2 WHERE f2.following_id = u.id AND f2.follower_id = $4) AS is_following
 FROM users u
 JOIN follows f ON u.id = f.follower_id
@@ -257,6 +264,7 @@ func (q *Queries) ListFollowersUsers(ctx context.Context, arg ListFollowersUsers
 			&i.User.DisplayName,
 			&i.User.Bio,
 			&i.User.AvatarUrl,
+			&i.User.BannerUrl,
 			&i.User.Role,
 			&i.User.Provider,
 			&i.User.FollowersCount,
@@ -276,7 +284,7 @@ func (q *Queries) ListFollowersUsers(ctx context.Context, arg ListFollowersUsers
 }
 
 const listFollowingUsers = `-- name: ListFollowingUsers :many
-SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
+SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.banner_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
   EXISTS(SELECT 1 FROM follows f2 WHERE f2.following_id = u.id AND f2.follower_id = $4) AS is_following
 FROM users u
 JOIN follows f ON u.id = f.following_id
@@ -319,6 +327,7 @@ func (q *Queries) ListFollowingUsers(ctx context.Context, arg ListFollowingUsers
 			&i.User.DisplayName,
 			&i.User.Bio,
 			&i.User.AvatarUrl,
+			&i.User.BannerUrl,
 			&i.User.Role,
 			&i.User.Provider,
 			&i.User.FollowersCount,
@@ -338,7 +347,7 @@ func (q *Queries) ListFollowingUsers(ctx context.Context, arg ListFollowingUsers
 }
 
 const listSuggestedUsers = `-- name: ListSuggestedUsers :many
-SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
+SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.banner_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
   EXISTS(SELECT 1 FROM follows f2 WHERE f2.following_id = u.id AND f2.follower_id = $4) AS is_following
 FROM users u
 LEFT JOIN follows f ON f.following_id = u.id AND f.follower_id = $1
@@ -381,6 +390,7 @@ func (q *Queries) ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsers
 			&i.User.DisplayName,
 			&i.User.Bio,
 			&i.User.AvatarUrl,
+			&i.User.BannerUrl,
 			&i.User.Role,
 			&i.User.Provider,
 			&i.User.FollowersCount,
@@ -400,7 +410,7 @@ func (q *Queries) ListSuggestedUsers(ctx context.Context, arg ListSuggestedUsers
 }
 
 const listTopUsers = `-- name: ListTopUsers :many
-SELECT id, username, email, display_name, bio, avatar_url, role, provider, followers_count, following_count, created_at, updated_at FROM users
+SELECT id, username, email, display_name, bio, avatar_url, banner_url, role, provider, followers_count, following_count, created_at, updated_at FROM users
 ORDER BY followers_count DESC
   , id DESC
 LIMIT $1 OFFSET $2
@@ -427,6 +437,7 @@ func (q *Queries) ListTopUsers(ctx context.Context, arg ListTopUsersParams) ([]U
 			&i.DisplayName,
 			&i.Bio,
 			&i.AvatarUrl,
+			&i.BannerUrl,
 			&i.Role,
 			&i.Provider,
 			&i.FollowersCount,
@@ -445,7 +456,7 @@ func (q *Queries) ListTopUsers(ctx context.Context, arg ListTopUsersParams) ([]U
 }
 
 const searchUsers = `-- name: SearchUsers :many
-SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
+SELECT u.id, u.username, u.email, u.display_name, u.bio, u.avatar_url, u.banner_url, u.role, u.provider, u.followers_count, u.following_count, u.created_at, u.updated_at,
   EXISTS(SELECT 1 FROM follows f WHERE f.following_id = u.id AND f.follower_id = $4) AS is_following
 FROM users u
 WHERE u.username ILIKE '%' || $1 || '%'
@@ -488,6 +499,7 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Sea
 			&i.User.DisplayName,
 			&i.User.Bio,
 			&i.User.AvatarUrl,
+			&i.User.BannerUrl,
 			&i.User.Role,
 			&i.User.Provider,
 			&i.User.FollowersCount,
@@ -512,9 +524,10 @@ SET
   bio = $2,
   display_name = $3,
   avatar_url = $4,
+  banner_url = $5,
   updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, username, email, display_name, bio, avatar_url, role, provider, followers_count, following_count, created_at, updated_at
+RETURNING id, username, email, display_name, bio, avatar_url, banner_url, role, provider, followers_count, following_count, created_at, updated_at
 `
 
 type UpdateUserProfileParams struct {
@@ -522,6 +535,7 @@ type UpdateUserProfileParams struct {
 	Bio         *string `json:"bio"`
 	DisplayName *string `json:"display_name"`
 	AvatarUrl   *string `json:"avatar_url"`
+	BannerUrl   *string `json:"banner_url"`
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
@@ -530,6 +544,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		arg.Bio,
 		arg.DisplayName,
 		arg.AvatarUrl,
+		arg.BannerUrl,
 	)
 	var i User
 	err := row.Scan(
@@ -539,6 +554,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.DisplayName,
 		&i.Bio,
 		&i.AvatarUrl,
+		&i.BannerUrl,
 		&i.Role,
 		&i.Provider,
 		&i.FollowersCount,

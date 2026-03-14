@@ -94,6 +94,7 @@ type User struct {
 	DisplayName    *string   `json:"display_name"`
 	Bio            *string   `json:"bio"`
 	AvatarUrl      *string   `json:"avatar_url"`
+	BannerUrl      *string   `json:"banner_url"`
 	Role           string    `json:"role"`
 	Provider       string    `json:"provider"`
 	FollowersCount int32     `json:"followers_count"`

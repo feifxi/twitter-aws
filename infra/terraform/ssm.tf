@@ -9,6 +9,7 @@ locals {
     "/chmtwt/prod/DB_MAX_CONN_LIFETIME_MINUTES" = var.db_max_conn_lifetime_minutes
     "/chmtwt/prod/MAX_MEDIA_BYTES"              = var.max_media_bytes
     "/chmtwt/prod/MAX_AVATAR_BYTES"             = var.max_avatar_bytes
+    "/chmtwt/prod/MAX_BANNER_BYTES"             = var.max_banner_bytes
     "/chmtwt/prod/FRONTEND_URL"                 = join(",", local.frontend_origins)
     "/chmtwt/prod/COOKIE_DOMAIN"                = var.cookie_domain
     "/chmtwt/prod/COOKIE_SAME_SITE"             = var.cookie_same_site

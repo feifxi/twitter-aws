@@ -60,6 +60,7 @@ type UserItem struct {
 	DisplayName    *string
 	Bio            *string
 	AvatarUrl      *string
+	BannerUrl      *string
 	Role           string
 	Provider       string
 	FollowersCount int32

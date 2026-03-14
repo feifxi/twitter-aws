@@ -31,6 +31,7 @@ export function useAuth() {
     } finally {
       logout();
       queryClient.clear();
+      sessionStorage.clear();
     }
   }
 

@@ -7,6 +7,7 @@ CREATE TABLE users (
     display_name VARCHAR(30),
     bio VARCHAR(160),
     avatar_url TEXT,
+    banner_url TEXT,
     role VARCHAR(20) NOT NULL DEFAULT 'USER',
     provider VARCHAR(50) NOT NULL,
     followers_count INT NOT NULL DEFAULT 0,

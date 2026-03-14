@@ -163,17 +163,27 @@ export function useUnfollowUser() {
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ displayName, bio, avatar }: UpdateProfileInput & { avatar?: File }) => {
+    mutationFn: async ({ displayName, bio, avatar, banner, removeAvatar, removeBanner }: UpdateProfileInput & { avatar?: File; banner?: File; removeAvatar?: boolean; removeBanner?: boolean }) => {
       let avatarKey: string | undefined;
+      let bannerKey: string | undefined;
 
       if (avatar) {
         avatarKey = await uploadFileWithPresignedUrl(avatar, 'avatars');
+      } else if (removeAvatar) {
+        avatarKey = '';
+      }
+
+      if (banner) {
+        bannerKey = await uploadFileWithPresignedUrl(banner, 'banners');
+      } else if (removeBanner) {
+        bannerKey = '';
       }
 
       const payload = {
         displayName,
         bio,
         avatarKey,
+        bannerKey,
       };
 
       const { data } = await axiosInstance.put<UserResponse>('/users/profile', payload);
