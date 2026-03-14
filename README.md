@@ -2,6 +2,10 @@
 
 Full-stack Twitter/X clone with a Next.js frontend, Go backend, and production-ready AWS infrastructure managed by Terraform—featuring a complete observability stack with Grafana Cloud, Prometheus, and Loki.
 
+<p align="center">
+  <img src="docs/assets/app-preview.png" alt="App Preview" width="100%" style="border-radius: 8px;">
+</p>
+
 ## Features
 
 - **Authentication** — Google OAuth with JWT access & refresh tokens
@@ -261,6 +265,20 @@ tail -f /var/log/cloud-init-output.log
 * `No data` in Grafana — The monitoring agent hasn't reached the "Loki" setup step yet.
 
 Once you see the "✅ Setup Complete!" message in the log, your server is 100% ready.
+
+### Troubleshooting SSH & RDS Connections
+
+If you see the error **`WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!`** when connecting/tunneling, it is because the EC2 instance was recreated but is reusing an old IP address.
+
+**The Fix:**
+Run this command to clear the stale host key from your computer:
+
+```bash
+ssh-keygen -R <INSTANCE_IP>
+# Example: ssh-keygen -R 10.0.0.82
+```
+
+After running this, try the `aws ec2-instance-connect ssh` command again. You will be asked to confirm the new key; type **"yes"**.
 
 ### Connect to RDS (via SSH tunnel)
 
