@@ -23,6 +23,7 @@ locals {
     "/chmtwt/prod/GATEWAY_SECRET"               = var.gateway_secret
     "/chmtwt/prod/REDIS_ADDRESS"                = var.redis_address
     "/chmtwt/prod/REDIS_PASSWORD"               = var.redis_password
+    "/chmtwt/prod/NEXT_PUBLIC_API_URL"          = "${aws_apigatewayv2_stage.default.invoke_url}api/v1"
   }
 }
 

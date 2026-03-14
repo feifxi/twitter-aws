@@ -7,10 +7,11 @@ resource "aws_apigatewayv2_api" "this" {
   tags = { Name = "${var.project_name}-api-gateway" }
   
   cors_configuration {
-    allow_origins = ["*"]
-    allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    allow_headers = ["Origin", "Content-Type", "Accept", "Authorization", "X-Gateway-Secret"]
-    max_age       = 3600
+    allow_origins     = local.frontend_origins
+    allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allow_headers     = ["Origin", "Content-Type", "Accept", "Authorization"]
+    allow_credentials = true
+    max_age           = 3600
   }
 }
 

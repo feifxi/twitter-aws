@@ -72,7 +72,6 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 
 	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
 	ctx.Writer.Header().Set("Cache-Control", "no-cache")
-	ctx.Writer.Header().Set("Connection", "keep-alive")
 	ctx.Writer.Header().Set("X-Accel-Buffering", "no")
 
 	userID, ok := mustCurrentUserID(ctx)

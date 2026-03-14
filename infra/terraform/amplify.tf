@@ -37,6 +37,10 @@ resource "aws_amplify_app" "this" {
             preBuild:
               commands:
                 - npm ci
+                - export NEXT_PUBLIC_API_URL=$(aws ssm get-parameter --name "/chmtwt/prod/NEXT_PUBLIC_API_URL" --with-decryption --query "Parameter.Value" --output text --region ap-southeast-1)
+                - export NEXT_PUBLIC_GOOGLE_CLIENT_ID=$(aws ssm get-parameter --name "/chmtwt/prod/GOOGLE_CLIENT_ID" --with-decryption --query "Parameter.Value" --output text --region ap-southeast-1)
+                - echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" >> .env.production
+                - echo "NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID" >> .env.production
             build:
               commands:
                 - npm run build
@@ -53,8 +57,6 @@ resource "aws_amplify_app" "this" {
   # Using the API Gateway URL for the backend communication
   environment_variables = {
     AMPLIFY_MONOREPO_APP_ROOT    = "twitter-next-web"
-    NEXT_PUBLIC_API_URL          = "${aws_apigatewayv2_stage.default.invoke_url}api/v1"
-    NEXT_PUBLIC_GOOGLE_CLIENT_ID = var.google_client_id
     NEXT_TELEMETRY_DISABLED      = "1"
   }
 
@@ -83,6 +85,22 @@ resource "aws_amplify_branch" "main" {
   framework         = "Next.js - SSR"
   stage             = "PRODUCTION"
   enable_auto_build = true
-
   tags = { Name = "${var.project_name}-amplify-branch-${var.gh_branch}" }
+}
+
+resource "aws_iam_role_policy" "amplify_ssm" {
+  name = "${var.project_name}-amplify-ssm-policy"
+  role = aws_iam_role.amplify.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ]
+      Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/chmtwt/prod/*"
+    }]
+  })
 }
