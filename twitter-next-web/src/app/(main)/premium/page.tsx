@@ -1,10 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import { XLogo } from '@/components/XLogo';
 import { Button } from '@/components/ui/button';
 import { Check } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function PremiumPage() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const features = [
     'เป็นที่รักของแก๊ง call center',
     'โพสต์ไปก็ไม่มีใครอ่าน',
@@ -13,7 +23,7 @@ export default function PremiumPage() {
   ];
 
   const handleSubscribe = () => {
-    alert('ผมรู้ IP คุณแล้ว เตรียมตัวโดนเช็คอิน');
+    setIsModalOpen(true);
   };
 
   return (
@@ -63,6 +73,25 @@ export default function PremiumPage() {
             <p className="mb-2">Learn more about Premium and Verified Organizations</p>
         </div>
       </div>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-[400px] border-border bg-background">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">สมัคร Premium?</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-[15px] pt-2">
+              ผมรู้ IP คุณแล้ว เตรียมตัวโดนเช็คอินที่หน้าบ้านได้เลย
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-4">
+            <Button 
+              className="w-full rounded-full font-bold bg-primary text-white hover:bg-primary/90" 
+              onClick={() => setIsModalOpen(false)}
+            >
+              เข้าใจแล้ว (เตรียมตัว)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

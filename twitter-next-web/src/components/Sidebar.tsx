@@ -175,7 +175,7 @@ function Footer() {
       <span>Accessibility</span>
       <span>Ads info</span>
       <span>More ...</span>
-      <p className="mt-1">© 2026 Chanom Corp.</p>
+      <p className="mt-1">© 2026 Chanombude Corp.</p>
     </div>
   );
 }
