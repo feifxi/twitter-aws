@@ -88,10 +88,7 @@ func (server *Server) streamMessagesWS(ctx *gin.Context) {
 }
 
 func (server *Server) wsUserID(ctx *gin.Context) (int64, bool) {
-	accessToken, err := ctx.Cookie("access_token")
-	if err != nil || strings.TrimSpace(accessToken) == "" {
-		accessToken = strings.TrimSpace(ctx.Query("access_token"))
-	}
+	accessToken := strings.TrimSpace(ctx.Query("access_token"))
 	if accessToken == "" {
 		authHeader := strings.TrimSpace(ctx.GetHeader("Authorization"))
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {

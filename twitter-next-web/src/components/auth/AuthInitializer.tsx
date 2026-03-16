@@ -11,6 +11,7 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
   const setAuth = useAuthStore((s) => s.setAuth);
   const logout = useAuthStore((s) => s.logout);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
   
   // Local state to prevent hydration mismatch for isInitialized which starts false
   const [mounted, setMounted] = useState(false);
@@ -31,7 +32,7 @@ export function AuthInitializer({ children }: { children: React.ReactNode }) {
             try {
                 // Verify token and get fresh user data
                 const { data } = await axiosInstance.get<UserResponse>('/auth/me');
-                setAuth(accessToken, data);
+                setAuth(accessToken, refreshToken!, data);
             } catch (error) {
                 console.error('Auth initialization failed:', error);
                 // If token is invalid (401), logout

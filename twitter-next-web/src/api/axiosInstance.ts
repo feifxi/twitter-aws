@@ -8,7 +8,6 @@ const baseURL = process.env.NEXT_PUBLIC_API_URL;
 export const axiosInstance = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
-  withCredentials: true, // send httpOnly refresh cookie to same-origin or CORS-allowed backend
 });
 
 // Request: inject access token from Zustand store
@@ -38,12 +37,16 @@ axiosInstance.interceptors.response.use(
       (originalRequest as { _retry?: boolean })._retry = true;
 
       try {
-        const { data } = await axios.post<{ accessToken: string; user: UserResponse }>(
+        const refreshToken = useAuthStore.getState().refreshToken;
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+
+        const { data } = await axios.post<{ accessToken: string; refreshToken: string; user: UserResponse }>(
           `${baseURL}/auth/refresh`,
-          {},
-          { withCredentials: true }
+          { refreshToken }
         );
-        useAuthStore.getState().setAuth(data.accessToken, data.user);
+        useAuthStore.getState().setAuth(data.accessToken, data.refreshToken, data.user);
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         return axiosInstance(originalRequest);
       } catch {

@@ -44,7 +44,7 @@ export default function GoogleLoginBtn() {
     try {
       const payload: GoogleAuthRequestInput = { idToken: googleToken };
       const { data } = await axiosInstance.post<AuthResponse>('/auth/google', payload);
-      setAuth(data.accessToken, data.user);
+      setAuth(data.accessToken, data.refreshToken, data.user);
       
       await queryClient.invalidateQueries({ queryKey: ['feeds'] });
       await queryClient.invalidateQueries({ queryKey: ['discovery'] });

@@ -53,14 +53,9 @@ func OptionalAuthMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 }
 
 func resolveAccessToken(ctx *gin.Context) (string, error) {
-	accessToken, err := ctx.Cookie("access_token")
-	if err == nil && len(accessToken) > 0 {
-		return accessToken, nil
-	}
-
 	authorizationHeader := ctx.GetHeader(authorizationHeaderKey)
 	if len(authorizationHeader) == 0 {
-		return "", errors.New("authorization cookie or header is not provided")
+		return "", errors.New("authorization header is not provided")
 	}
 
 	fields := strings.Fields(authorizationHeader)

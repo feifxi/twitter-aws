@@ -25,7 +25,6 @@ func (server *Server) loginGoogle(ctx *gin.Context) {
 		return
 	}
 
-	server.setSessionCookies(ctx, authData.AccessToken, authData.RefreshToken)
 	ctx.JSON(http.StatusOK, newAuthResponse(authData.AccessToken, authData.RefreshToken, authData.User))
 }
 
@@ -42,7 +41,6 @@ func (server *Server) refreshToken(ctx *gin.Context) {
 		return
 	}
 
-	server.setSessionCookies(ctx, authData.AccessToken, authData.RefreshToken)
 	ctx.JSON(http.StatusOK, newAuthResponse(authData.AccessToken, authData.RefreshToken, authData.User))
 }
 
@@ -54,7 +52,6 @@ func (server *Server) logout(ctx *gin.Context) {
 		server.authUC.Logout(ctx, nil, &rt)
 	}
 
-	server.clearSessionCookies(ctx)
 	ctx.JSON(http.StatusOK, successResponse())
 }
 
@@ -77,45 +74,13 @@ type refreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-// resolveRefreshToken reads the refresh token from the cookie first,
-// then falls back to a JSON body field for mobile / cross-origin clients.
+// resolveRefreshToken reads the refresh token from the JSON body field.
 func resolveRefreshToken(ctx *gin.Context) string {
-	if rt, err := ctx.Cookie("refresh_token"); err == nil && strings.TrimSpace(rt) != "" {
-		return rt
-	}
 	var body refreshTokenRequest
 	if ctx.ShouldBindJSON(&body) == nil && strings.TrimSpace(body.RefreshToken) != "" {
 		return body.RefreshToken
 	}
 	return ""
-}
-
-func (server *Server) setSessionCookies(ctx *gin.Context, accessToken, refreshToken string) {
-	ctx.SetSameSite(server.cookieSameSite())
-	ctx.SetCookie(
-		"access_token",
-		accessToken,
-		server.config.TokenDurationMinutes*60,
-		"/",
-		server.config.CookieDomain,
-		server.config.CookieSecure,
-		true,
-	)
-	ctx.SetCookie(
-		"refresh_token",
-		refreshToken,
-		server.config.RefreshTokenDurationDays*24*60*60,
-		"/api/v1/auth/refresh",
-		server.config.CookieDomain,
-		server.config.CookieSecure,
-		true,
-	)
-}
-
-func (server *Server) clearSessionCookies(ctx *gin.Context) {
-	ctx.SetSameSite(server.cookieSameSite())
-	ctx.SetCookie("access_token", "", -1, "/", server.config.CookieDomain, server.config.CookieSecure, true)
-	ctx.SetCookie("refresh_token", "", -1, "/api/v1/auth/refresh", server.config.CookieDomain, server.config.CookieSecure, true)
 }
 
 func (server *Server) cookieSameSite() http.SameSite {

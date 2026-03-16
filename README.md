@@ -90,7 +90,9 @@ This project uses Google Gemini for the AI Assistant and tweet embeddings.
 1.  Go to [Google AI Studio](https://aistudio.google.com/).
 2.  Click **Get API key** and create a new API key.
 3.  Add the key to your `twitter-go-api/app.env` (`GEMINI_API_KEY`) and `infra/terraform/terraform.tfvars` (`gemini_api_key`).
-4.  (Optional) Customize the models used via `GEMINI_CHAT_MODEL` and `GEMINI_EMBEDDING_MODEL` (defaults to `gemini-2.5-flash` and `gemini-embedding-2-preview`).
+4.  **Verify Model Availability**: You can check which models are currently available for your key by visiting this URL:
+    `https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_API_KEY`
+5.  (Optional) Customize the models used via `GEMINI_CHAT_MODEL` and `GEMINI_EMBEDDING_MODEL` (defaults to `gemini-2.5-flash` and `gemini-embedding-2-preview`).
 
 ### 3. Grafana Cloud Setup (Monitoring)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"github.com/pgvector/pgvector-go"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -58,10 +59,13 @@ func (u *AssistantUsecase) Chat(ctx context.Context, input AssistantInput) (io.R
 	}
 
 	// 3. Construct System Prompt
-	systemPrompt := `You are an AI assistant for a social media app. You have access to the user's recent [Chat History] and [Timeline Context]. Prioritize the Timeline Context. Maintain conversational continuity. CRITICAL: Your memory is limited to the provided history. If asked about older context you don't have, honestly state you forgot due to this being a temporary chat and ask for clarification.
-
-	[Timeline Context]
-	` + timelineContext
+	systemPrompt := `You are the helpful, professional, and polite AI assistant for "Chanom Twitter", a social media platform and Twitter clone. 
+	Your goal is to provide accurate, concise, and friendly information to users of Chanom Twitter. 
+	You have access to the user's recent [Chat History] and [Timeline Context] from their feed. 
+	Prioritize the Timeline Context when answering questions about the app's content or the user's recent experience. 
+	Maintain conversational continuity and a helpful tone consistent with a premium social experience.
+	CRITICAL: Your memory is limited to the provided history. If asked about older context you don't have, politely state you don't have access to that part of the conversation and ask for clarification.
+` + "\n\n[Timeline Context]\n" + timelineContext
 
 	// 4. Call Gemini 1.5 Flash with Streaming
 	model := client.GenerativeModel(u.config.GeminiChatModel)
@@ -102,7 +106,7 @@ func (u *AssistantUsecase) Chat(ctx context.Context, input AssistantInput) (io.R
 		defer client.Close()
 		for {
 			resp, err := iter.Next()
-			if err == io.EOF {
+			if err == io.EOF || err == iterator.Done {
 				break
 			}
 			if err != nil {

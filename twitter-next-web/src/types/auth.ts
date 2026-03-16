@@ -6,5 +6,6 @@ export interface GoogleAuthRequest {
 
 export interface AuthResponse {
     accessToken: string;
+    refreshToken: string;
     user: UserResponse;
 }
