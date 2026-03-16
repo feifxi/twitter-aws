@@ -30,11 +30,12 @@ resource "aws_vpc_security_group_egress_rule" "nat_all" {
 }
 
 resource "aws_instance" "nat" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.nano"
-  subnet_id              = aws_subnet.public_1.id
-  vpc_security_group_ids = [aws_security_group.nat.id]
-  source_dest_check      = false # Required for NAT
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.nano"
+  subnet_id                   = aws_subnet.public_1.id
+  vpc_security_group_ids      = [aws_security_group.nat.id]
+  source_dest_check           = false # Required for NAT
+  associate_public_ip_address = true  # <--- [เพิ่ม] บังคับให้รับ Public IP เพื่อออกเน็ต
 
   user_data = <<-EOF
     #!/bin/bash
@@ -42,9 +43,12 @@ resource "aws_instance" "nat" {
     echo 1 > /proc/sys/net/ipv4/ip_forward
     echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
 
+    # Get the default network interface name dynamically (usually ens5 on t3)
+    INTERFACE=$(ip route | awk '/^default/ {print $5}')
+
     # Configure iptables for NAT
     yum install -y iptables-services
-    iptables -t nat -A POSTROUTING -o ens5 -s ${var.vpc_cidr} -j MASQUERADE
+    iptables -t nat -A POSTROUTING -o $INTERFACE -s ${var.vpc_cidr} -j MASQUERADE
     iptables-save > /etc/sysconfig/iptables
     systemctl enable iptables
     systemctl start iptables
