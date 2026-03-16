@@ -46,7 +46,8 @@ def process_message(conn, msg_body):
     response = genai.embed_content(
         model=model_name,
         content=content,
-        task_type="retrieval_document"
+        task_type="retrieval_document",
+        output_dimensionality=768
     )
     
     embedding_val = response.get('embedding')
