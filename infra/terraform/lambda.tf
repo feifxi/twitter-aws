@@ -51,13 +51,34 @@ resource "aws_iam_role_policy" "lambda_sqs" {
   })
 }
 
+# ── Build Step: Install Python Dependencies ─────────
+
+resource "null_resource" "lambda_pip_install" {
+  triggers = {
+    requirements = filemd5("${path.module}/../lambda/tweet-embedding/requirements.txt")
+    source       = filemd5("${path.module}/../lambda/tweet-embedding/lambda_function.py")
+  }
+
+  provisioner "local-exec" {
+    command     = "pip install -r requirements.txt -t . --upgrade --quiet"
+    working_dir = "${path.module}/../lambda/tweet-embedding"
+  }
+}
+
 # ── Lambda Function ─────────────────────────────────
 
 data "archive_file" "lambda_embedding_zip" {
+  depends_on = [null_resource.lambda_pip_install]
 
   type        = "zip"
   source_dir  = "${path.module}/../lambda/tweet-embedding"
   output_path = "${path.module}/.terraform/archive/tweet_embedding.zip"
+
+  excludes = [
+    "requirements.txt",
+    "__pycache__",
+    "*.pyc",
+  ]
 }
 
 resource "aws_lambda_function" "tweet_embedding" {
@@ -84,13 +105,16 @@ resource "aws_lambda_function" "tweet_embedding" {
   }
 
   tags = { Name = "${var.project_name}-tweet-embedding-lambda" }
+
+  depends_on = [aws_instance.nat]
 }
 
 # ── SQS to Lambda Trigger ───────────────────────────
 
 resource "aws_lambda_event_source_mapping" "sqs_to_lambda" {
-  event_source_arn = aws_sqs_queue.tweet_embedding.arn
-  function_name    = aws_lambda_function.tweet_embedding.arn
-  batch_size       = 10
-  enabled          = true
+  event_source_arn        = aws_sqs_queue.tweet_embedding.arn
+  function_name           = aws_lambda_function.tweet_embedding.arn
+  batch_size              = 10
+  enabled                 = true
+  function_response_types = ["ReportBatchItemFailures"]
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -21,28 +22,33 @@ func (server *Server) assistant(ctx *gin.Context) {
 		return
 	}
 
-	// Set SSE headers
+	// Set SSE headers before writing status code
 	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
 	ctx.Writer.Header().Set("Cache-Control", "no-cache")
 	ctx.Writer.Header().Set("Connection", "keep-alive")
-	ctx.Writer.Header().Set("Transfer-Encoding", "chunked")
+	ctx.Writer.Header().Set("X-Accel-Buffering", "no") // Disable nginx/proxy buffering
+	ctx.Writer.WriteHeader(http.StatusOK)
+	ctx.Writer.Flush()
 
-	ctx.Stream(func(w io.Writer) bool {
-		buffer := make([]byte, 1024)
-		for {
-			n, err := reader.Read(buffer)
-			if n > 0 {
-				_, _ = w.Write(buffer[:n])
-				if flusher, ok := w.(http.Flusher); ok {
-					flusher.Flush()
-				}
-			}
-			if err != nil {
-				if err == io.EOF {
-					return false // Close stream gracefully
-				}
-				return false
-			}
+	buffer := make([]byte, 1024)
+	for {
+		n, readErr := reader.Read(buffer)
+		if n > 0 {
+			// Write proper SSE frame: "data: <chunk>\n\n"
+			chunk := string(buffer[:n])
+			_, _ = fmt.Fprintf(ctx.Writer, "data: %s\n\n", chunk)
+			ctx.Writer.Flush()
 		}
-	})
+		if readErr != nil {
+			if readErr != io.EOF {
+				// Send error as SSE event before closing
+				_, _ = fmt.Fprintf(ctx.Writer, "event: error\ndata: %s\n\n", readErr.Error())
+				ctx.Writer.Flush()
+			}
+			break
+		}
+	}
+
+	// Gracefully close — no trailing writes. This ensures API Gateway
+	// doesn't hit the 29-second idle timeout on a still-open connection.
 }

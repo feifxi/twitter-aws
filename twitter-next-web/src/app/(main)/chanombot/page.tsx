@@ -92,12 +92,29 @@ export default function ChanomBotPage() {
       const decoder = new TextDecoder();
       let done = false;
       let accumulatedContent = '';
+      let sseBuffer = '';
 
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
-        const chunkValue = decoder.decode(value);
-        accumulatedContent += chunkValue;
+        sseBuffer += decoder.decode(value, { stream: !done });
+
+        // Parse SSE frames: each frame is "data: <content>\n\n"
+        const frames = sseBuffer.split('\n\n');
+        // Keep the last incomplete frame in the buffer
+        sseBuffer = frames.pop() || '';
+
+        for (const frame of frames) {
+          for (const line of frame.split('\n')) {
+            if (line.startsWith('event: error')) {
+              // Skip error event marker, data line follows
+              continue;
+            }
+            if (line.startsWith('data: ')) {
+              accumulatedContent += line.slice(6);
+            }
+          }
+        }
 
         setMessages((prev) => 
           prev.map((msg) => 
