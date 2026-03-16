@@ -3,20 +3,17 @@
 Base URL: `/api/v1`
 
 ## Auth & Session
-- Access token is accepted from either:
-  1. Cookie: `access_token`
-  2. Header: `Authorization: Bearer <token>`
-- Login/refresh set HttpOnly cookies:
-  1. `access_token` (path `/`)
-  2. `refresh_token` (path `/api/v1/auth/refresh`)
-- Send requests with `credentials: include` from frontend.
+- Authentication is strictly token-based. No cookies are used.
+- The frontend must store tokens in **LocalStorage**.
+- All private requests must include the header: `Authorization: Bearer <accessToken>`.
+- The `refreshToken` is used via JSON body to obtain new access tokens.
 
 ## Common Query Params
 - Pagination (where supported):
   1. `cursor` (opaque token from previous response `nextCursor`)
   2. `size` (default `20`, max `50`)
 
-## PageResponse\<T\>
+## PageResponse<T>
 ```json
 {
   "items": [],
@@ -50,6 +47,15 @@ Base URL: `/api/v1`
   "isFollowing": false,
   "followersCount": 10,
   "followingCount": 20
+}
+```
+
+### AuthResponse
+```json
+{
+  "accessToken": "jwt",
+  "refreshToken": "uuid/jwt",
+  "user": { "...UserResponse" }
 }
 ```
 
@@ -110,27 +116,22 @@ Body:
 ```json
 { "idToken": "google_id_token" }
 ```
-Response 200:
-```json
-{
-  "accessToken": "jwt",
-  "user": { "...UserResponse" }
-}
-```
+Response 200: `AuthResponse`
 
 ### POST `/auth/refresh`
-- Requires `refresh_token` cookie.
-Response 200:
+Body:
 ```json
-{
-  "accessToken": "jwt",
-  "user": { "...UserResponse" }
-}
+{ "refreshToken": "string" }
 ```
+Response 200: `AuthResponse`
 
 ### POST `/auth/logout`
-- Optional auth: accepts `Authorization: Bearer <token>` or `access_token` cookie.
-- Also revokes by `refresh_token` cookie when no auth context is present.
+Body (Optional):
+```json
+{ "refreshToken": "string" }
+```
+- If `Authorization` header is present, it revokes the session associated with the access token.
+- If `refreshToken` is provided in the body, it explicitly revokes that refresh token.
 Response 200:
 ```json
 { "success": true }
