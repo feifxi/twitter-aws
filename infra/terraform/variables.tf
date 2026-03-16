@@ -98,24 +98,6 @@ variable "max_banner_bytes" {
   default     = "104857600" # 100 MB
 }
 
-variable "cookie_domain" {
-  description = "Domain for authentication cookies (leave empty for localhost)"
-  type        = string
-  default     = ""
-}
-
-variable "cookie_same_site" {
-  description = "SameSite policy for authentication cookies"
-  type        = string
-  default     = "Lax"
-}
-
-variable "cookie_secure" {
-  description = "Secure policy for authentication cookies (should be true in production)"
-  type        = string
-  default     = "true"
-}
-
 variable "token_duration_minutes" {
   description = "Duration in minutes before the JWT token expires"
   type        = string

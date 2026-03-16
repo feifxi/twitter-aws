@@ -251,7 +251,7 @@ func TestLogoutWithAuthPayloadCallsUsecaseWithUserID(t *testing.T) {
 	setAuthorizedUser(ctx, 77)
 
 	s := &Server{
-		config: config.Config{CookieSameSite: "Lax"},
+		config: config.Config{},
 		authUC: mock,
 	}
 	s.logout(ctx)

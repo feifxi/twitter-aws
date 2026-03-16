@@ -22,9 +22,6 @@ type Config struct {
 	MaxAvatarBytes           int64  `mapstructure:"MAX_AVATAR_BYTES"`
 	MaxBannerBytes           int64  `mapstructure:"MAX_BANNER_BYTES"`
 	FrontendURL              string `mapstructure:"FRONTEND_URL"`
-	CookieDomain             string `mapstructure:"COOKIE_DOMAIN"`
-	CookieSameSite           string `mapstructure:"COOKIE_SAME_SITE"`
-	CookieSecure             bool   `mapstructure:"COOKIE_SECURE"`
 	TokenSymmetricKey        string `mapstructure:"TOKEN_SYMMETRIC_KEY"`
 	TokenDurationMinutes     int    `mapstructure:"TOKEN_DURATION_MINUTES"`
 	RefreshTokenDurationDays int    `mapstructure:"REFRESH_TOKEN_DURATION_DAYS"`
@@ -48,9 +45,6 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetConfigType("env")
 
 	viper.SetDefault("FRONTEND_URL", "http://localhost:3000")
-	viper.SetDefault("COOKIE_DOMAIN", "")
-	viper.SetDefault("COOKIE_SAME_SITE", "Lax")
-	viper.SetDefault("COOKIE_SECURE", false)
 	viper.SetDefault("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
 	viper.SetDefault("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2-preview")
 	viper.SetDefault("DB_MAX_CONNS", int32(25))
@@ -72,9 +66,6 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.BindEnv("MAX_AVATAR_BYTES")
 	viper.BindEnv("MAX_BANNER_BYTES")
 	viper.BindEnv("FRONTEND_URL")
-	viper.BindEnv("COOKIE_DOMAIN")
-	viper.BindEnv("COOKIE_SAME_SITE")
-	viper.BindEnv("COOKIE_SECURE")
 	viper.BindEnv("TOKEN_SYMMETRIC_KEY")
 	viper.BindEnv("TOKEN_DURATION_MINUTES")
 	viper.BindEnv("REFRESH_TOKEN_DURATION_DAYS")
@@ -166,19 +157,8 @@ func loadFromSSM() {
 }
 
 func (c Config) ValidateForRuntime() error {
-	if strings.EqualFold(strings.TrimSpace(c.CookieSameSite), "none") && !c.CookieSecure {
-		return fmt.Errorf("COOKIE_SECURE must be true when COOKIE_SAME_SITE=None")
-	}
-
-	if !strings.EqualFold(strings.TrimSpace(c.Environment), "production") {
-		return nil
-	}
-
 	if strings.TrimSpace(c.FrontendURL) == "" {
 		return fmt.Errorf("FRONTEND_URL is required in production")
-	}
-	if !c.CookieSecure {
-		return fmt.Errorf("COOKIE_SECURE must be true in production")
 	}
 	if strings.Contains(strings.ToLower(c.DBSource), "sslmode=disable") {
 		return fmt.Errorf("DATABASE_URL must use sslmode in production")

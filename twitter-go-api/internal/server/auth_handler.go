@@ -82,14 +82,3 @@ func resolveRefreshToken(ctx *gin.Context) string {
 	}
 	return ""
 }
-
-func (server *Server) cookieSameSite() http.SameSite {
-	switch strings.ToLower(strings.TrimSpace(server.config.CookieSameSite)) {
-	case "none":
-		return http.SameSiteNoneMode
-	case "strict":
-		return http.SameSiteStrictMode
-	default:
-		return http.SameSiteLaxMode
-	}
-}
