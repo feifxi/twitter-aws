@@ -1,6 +1,6 @@
 # Twitter Clone
 
-Full-stack Twitter/X clone with a Next.js frontend, Go backend, and production-ready AWS infrastructure managed by Terraform—featuring a complete observability stack with Grafana Cloud, Prometheus, and Loki.
+Full-stack Twitter/X clone with a Next.js frontend, Go backend, and production-ready AWS infrastructure managed by Terraform—featuring an AI assistant with RAG and a complete observability stack with Grafana Cloud.
 
 <p align="center">
   <img src="docs/assets/app-preview.png" alt="App Preview" width="100%" style="border-radius: 8px;">
@@ -17,6 +17,8 @@ Full-stack Twitter/X clone with a Next.js frontend, Go backend, and production-r
 - **Direct Messages** — Real-time conversations over WebSocket
 - **Search** — Search users, tweets, and hashtags
 - **Trending & Discovery** — Trending hashtags and suggested users
+- **AI Assistant** — Context-aware chat powered by Gemini 2.5 Flash with personal timeline knowledge
+- **RAG (Retrieval-Augmented Generation)** — Automatic tweet vectorization via Gemini Embedding 2.0 and pgvector search for accurate context retrieval
 - **Observability** — Real-time metrics (Prometheus) and log aggregation (Loki) via Grafana Cloud
 
 ## Tech Stack
@@ -25,7 +27,7 @@ Full-stack Twitter/X clone with a Next.js frontend, Go backend, and production-r
 |---|---|
 | Frontend | Next.js (App Router), TypeScript, Tailwind CSS, TanStack Query, Zustand |
 | Backend | Go, Gin, PostgreSQL + sqlc, Redis |
-| Infrastructure | AWS (Amplify, API Gateway, EC2, RDS, S3, CloudFront), Terraform, GitHub Actions |
+| Infrastructure | AWS (Amplify, API Gateway, EC2, RDS, S3, CloudFront, SQS, Lambda), Terraform, GitHub Actions |
 | Observability | Grafana Cloud (Loki, Prometheus), Grafana Alloy, Node Exporter |
 
 ## Architecture
@@ -49,6 +51,7 @@ We use **Grafana Cloud** for a "Single Pane of Glass" monitoring experience. The
 | [Terraform](https://developer.hashicorp.com/terraform/install) (v1.5+) | Infrastructure provisioning |
 | [Make](https://www.gnu.org/software/make/) | Running Go API tasks (migrations, etc.) |
 | [Google Cloud Console](https://console.cloud.google.com/) | Google OAuth 2.0 Client ID for authentication |
+| [Google AI Studio](https://aistudio.google.com/) | Gemini API Key for Assistant & RAG |
 
 **Install via Homebrew (macOS):**
 
@@ -80,7 +83,16 @@ This project uses Google OAuth for authentication. You need to create a Client I
       - `http://localhost:3000/api/auth/callback/google`
 5.  **Copy Client ID**: Save the **Client ID**. You will need this for your `.env` files and Terraform variables.
 
-### 2. Grafana Cloud Setup (Monitoring)
+### 2. Google Gemini Setup (AI & RAG)
+
+This project uses Google Gemini for the AI Assistant and tweet embeddings.
+
+1.  Go to [Google AI Studio](https://aistudio.google.com/).
+2.  Click **Get API key** and create a new API key.
+3.  Add the key to your `twitter-go-api/app.env` (`GEMINI_API_KEY`) and `infra/terraform/terraform.tfvars` (`gemini_api_key`).
+4.  (Optional) Customize the models used via `GEMINI_CHAT_MODEL` and `GEMINI_EMBEDDING_MODEL` (defaults to `gemini-2.5-flash` and `gemini-embedding-2-preview`).
+
+### 3. Grafana Cloud Setup (Monitoring)
 
 This project supports centralized logging and metrics via [Grafana Cloud](https://grafana.com/products/cloud/) (Free Tier).
 
@@ -143,13 +155,14 @@ npm run lint
 |---|---|
 | **Amplify** | Hosts & auto-deploys the Next.js frontend (SSR) |
 | **API Gateway** | HTTP API proxy to the backend EC2 instance |
-| **EC2** | Runs the Go API in Docker via `docker compose` |
-| **RDS** | Managed PostgreSQL database (private subnet) |
+| **EC2** | Runs the Go API and observability agents (Grafana Alloy, Node Exporter) via Docker |
+| **RDS** | Managed PostgreSQL database with pgvector support (private subnet) |
 | **S3** | Media storage with presigned-URL uploads |
 | **CloudFront** | CDN for serving S3 media over HTTPS |
+| **SQS** | Buffers tweet creation events for asynchronous vectorization |
+| **Lambda** | Python-based worker that generates embeddings via Gemini and stores them in RDS |
+| **NAT Instance** | Provides cost-effective internet access for Lambda and RDS in private subnets |
 | **SSM Parameter Store** | Securely manages, stores, and injects runtime configuration into the Go API |
-| **Grafana Alloy** | Efficient agent on EC2 for scraping Go metrics and forwarding Docker logs to Loki |
-| **Node Exporter** | Sidecar container providing system-level metrics (CPU, Memory, Disk) for the EC2 host |
 | **Terraform** | Infrastructure as Code for all resources (using `.tftpl` templates for configuration) |
 | **GitHub Actions** | CI/CD pipeline pulling from GHCR and deploying via SSM Run Command |
 
@@ -321,6 +334,7 @@ This forwards your local port `5433` to RDS port `5432` through the EC2 instance
 ├── twitter-java-api/    # Java backend (legacy/alternative)
 ├── infra/
 │   ├── terraform/       # AWS infrastructure (Terraform)
+│   ├── lambda/          # Python Lambda functions (Embeddings worker)
 │   └── ec2/             # Docker Compose templates (.tftpl) & Alloy configuration
 ├── docs/
 │   └── assets/          # Architecture diagrams & Monitoring screenshots
