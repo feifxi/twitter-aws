@@ -227,7 +227,7 @@ func TestRefreshTokenSuccessSetsTokensInResponse(t *testing.T) {
 		t.Fatalf("expected 200, got %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	var got authResponse
+	var got AuthResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("invalid json response: %v", err)
 	}

@@ -11,10 +11,10 @@ func TestSendNotificationToUserDeliversToRegisteredClient(t *testing.T) {
 	s := &Server{
 		sseClients: make(map[int64][]*sseClient),
 	}
-	client := &sseClient{channel: make(chan notificationResponse, 1)}
+	client := &sseClient{channel: make(chan NotificationResponse, 1)}
 	s.sseClients[7] = []*sseClient{client}
 
-	s.sendNotificationToUser(7, notificationResponse{ID: 99})
+	s.sendNotificationToUser(7, NotificationResponse{ID: 99})
 
 	select {
 	case msg := <-client.channel:
@@ -33,5 +33,5 @@ func TestSendNotificationToUserWithoutClientsNoop(t *testing.T) {
 		sseClients: make(map[int64][]*sseClient),
 	}
 
-	s.sendNotificationToUser(42, notificationResponse{ID: 1})
+	s.sendNotificationToUser(42, NotificationResponse{ID: 1})
 }

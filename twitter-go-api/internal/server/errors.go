@@ -53,7 +53,7 @@ func writeError(ctx *gin.Context, err error) {
 				Message: msgForTag(fe),
 			}
 		}
-		ctx.JSON(http.StatusBadRequest, apperr.ErrorResponse{
+		ctx.JSON(http.StatusBadRequest, ErrorResponse{
 			Code:      "VALIDATION_ERROR",
 			Message:   "invalid request payload",
 			RequestID: requestID,
@@ -63,7 +63,7 @@ func writeError(ctx *gin.Context, err error) {
 	}
 	var numErr *strconv.NumError
 	if errors.As(err, &numErr) {
-		response := apperr.ErrorResponse{
+		response := ErrorResponse{
 			Code:      "VALIDATION_ERROR",
 			Message:   "invalid request payload",
 			RequestID: requestID,
@@ -78,7 +78,7 @@ func writeError(ctx *gin.Context, err error) {
 	var syntaxErr *json.SyntaxError
 	var typeErr *json.UnmarshalTypeError
 	if errors.As(err, &syntaxErr) || errors.As(err, &typeErr) {
-		ctx.JSON(http.StatusBadRequest, apperr.ErrorResponse{
+		ctx.JSON(http.StatusBadRequest, ErrorResponse{
 			Code:      "BAD_REQUEST",
 			Message:   "malformed JSON request body",
 			RequestID: requestID,
@@ -147,7 +147,7 @@ func writeError(ctx *gin.Context, err error) {
 			Msg("Internal server error")
 	}
 
-	ctx.JSON(status, apperr.ErrorResponse{Code: code, Message: message, RequestID: requestID})
+	ctx.JSON(status, ErrorResponse{Code: code, Message: message, RequestID: requestID})
 }
 
 func defaultMessage(in, fallback string) string {
@@ -158,7 +158,7 @@ func defaultMessage(in, fallback string) string {
 }
 
 func writeValidationError(ctx *gin.Context, field, message string) {
-	ctx.JSON(http.StatusBadRequest, apperr.ErrorResponse{
+	ctx.JSON(http.StatusBadRequest, ErrorResponse{
 		Code:      "VALIDATION_ERROR",
 		Message:   "invalid request payload",
 		RequestID: middleware.GetRequestID(ctx),

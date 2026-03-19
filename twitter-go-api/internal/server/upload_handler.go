@@ -13,6 +13,17 @@ type presignRequest struct {
 	ContentLength *int64 `json:"contentLength" binding:"omitempty,min=1"`
 }
 
+// presignUpload godoc
+// @Summary		Presign Upload URL
+// @Description	Generate a temporary presigned URL to upload a file directly to S3.
+// @Tags			Uploads
+// @Accept			json
+// @Produce		json
+// @Param			request	body			presignRequest	true	"Upload request details"
+// @Success		200		{object}	map[string]string	"presignedUrl and objectKey"
+// @Security		BearerAuth
+// @Failure		401		{object}	ErrorResponse
+// @Router			/uploads/presign [post]
 func (server *Server) presignUpload(ctx *gin.Context) {
 	if _, ok := mustCurrentUserID(ctx); !ok {
 		return

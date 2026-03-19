@@ -14,10 +14,10 @@ import (
 
 // A simple in-memory client manager for SSE.
 type sseClient struct {
-	channel chan notificationResponse
+	channel chan NotificationResponse
 }
 
-func (server *Server) sendNotificationToUser(userID int64, notification notificationResponse) {
+func (server *Server) sendNotificationToUser(userID int64, notification NotificationResponse) {
 	server.sseMu.RLock()
 	userClients, ok := server.sseClients[userID]
 	snapshot := append([]*sseClient(nil), userClients...)
@@ -63,6 +63,15 @@ func (server *Server) listenRedisNotifications() {
 	}
 }
 
+// streamNotifications godoc
+// @Summary		Stream Real-time Notifications (SSE)
+// @Description	Establish a Server-Sent Events (SSE) connection to receive near real-time notifications for likes, replies, retweets, and new followers.
+// @Tags			Notifications
+// @Produce			text/event-stream
+// @Success		200	{string}	string	"text/event-stream"
+// @Security		BearerAuth
+// @Failure		401		{object}	ErrorResponse
+// @Router			/notifications/stream [get]
 func (server *Server) streamNotifications(ctx *gin.Context) {
 	flusher, ok := ctx.Writer.(http.Flusher)
 	if !ok {
@@ -80,7 +89,7 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 	// Flush headers immediately to establish the connection with intermediaries (API Gateway)
 	flusher.Flush()
 
-	client := &sseClient{channel: make(chan notificationResponse, 32)}
+	client := &sseClient{channel: make(chan NotificationResponse, 32)}
 
 	server.sseMu.Lock()
 	server.sseClients[userID] = append(server.sseClients[userID], client)
@@ -134,6 +143,17 @@ func (server *Server) streamNotifications(ctx *gin.Context) {
 	}
 }
 
+// listNotifications godoc
+// @Summary		List Notifications
+// @Description	Get a paginated list of social notifications (likes, follows, etc.) for the current user.
+// @Tags			Notifications
+// @Produce		json
+// @Param			cursor	query		string	false	"Pagination cursor"
+// @Param			size	query		int		false	"Number of items per page"
+// @Success		200		{object}	PageResponse[NotificationResponse]
+// @Security		BearerAuth
+// @Failure		401		{object}	ErrorResponse
+// @Router			/notifications [get]
 func (server *Server) listNotifications(ctx *gin.Context) {
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {
@@ -144,16 +164,25 @@ func (server *Server) listNotifications(ctx *gin.Context) {
 		return
 	}
 	page := offset / size
-	notifications, err := server.notifyUC.ListNotifications(ctx, userID, page, size+1)
+	items, err := server.notifyUC.ListNotifications(ctx, userID, page, size+1)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
 
-	response := newNotificationResponseList(notifications)
-	ctx.JSON(http.StatusOK, buildPageResponse(response, size, offset))
+	response := newNotificationResponseList(items)
+	ctx.JSON(http.StatusOK, BuildPageResponse(response, size, offset))
 }
 
+// getUnreadNotificationCount godoc
+// @Summary		Get Unread Count
+// @Description	Calculate how many unread notifications the current user has.
+// @Tags			Notifications
+// @Produce		json
+// @Success		200	{object}	map[string]int64	"unread count"
+// @Security		BearerAuth
+// @Failure		401	{object}	ErrorResponse
+// @Router			/notifications/unread-count [get]
 func (server *Server) getUnreadNotificationCount(ctx *gin.Context) {
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {
@@ -167,6 +196,14 @@ func (server *Server) getUnreadNotificationCount(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"count": count})
 }
 
+// markNotificationRead godoc
+// @Summary		Mark All Read
+// @Description	Clear all unread notification badges for the current user.
+// @Tags			Notifications
+// @Success		200	{object}	SuccessResponse
+// @Security		BearerAuth
+// @Failure		401	{object}	ErrorResponse
+// @Router			/notifications/mark-read [post]
 func (server *Server) markNotificationRead(ctx *gin.Context) {
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {

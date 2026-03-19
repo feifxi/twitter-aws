@@ -3,26 +3,29 @@ package server
 import (
 	"time"
 
+	"github.com/chanombude/twitter-go-api/internal/apperr"
 	"github.com/chanombude/twitter-go-api/internal/db"
 	"github.com/chanombude/twitter-go-api/internal/usecase"
-	"github.com/gin-gonic/gin"
 )
 
-type authResponse struct {
+// ErrorResponse is a local alias for Swaggo readability.
+type ErrorResponse = apperr.ErrorResponse
+
+type AuthResponse struct {
 	AccessToken  string       `json:"accessToken"`
 	RefreshToken string       `json:"refreshToken"`
-	User         userResponse `json:"user"`
+	User         UserResponse `json:"user"`
 }
 
-func newAuthResponse(accessToken, refreshToken string, user usecase.UserItem) authResponse {
-	return authResponse{
+func newAuthResponse(accessToken, refreshToken string, user usecase.UserItem) AuthResponse {
+	return AuthResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		User:         newUserResponse(user),
 	}
 }
 
-type userResponse struct {
+type UserResponse struct {
 	ID             int64   `json:"id"`
 	Username       string  `json:"username"`
 	Email          string  `json:"email"`
@@ -35,8 +38,8 @@ type userResponse struct {
 	FollowingCount int32   `json:"followingCount"`
 }
 
-func newUserResponse(user usecase.UserItem) userResponse {
-	return userResponse{
+func newUserResponse(user usecase.UserItem) UserResponse {
+	return UserResponse{
 		ID:             user.ID,
 		Username:       user.Username,
 		Email:          user.Email,
@@ -50,31 +53,31 @@ func newUserResponse(user usecase.UserItem) userResponse {
 	}
 }
 
-type tweetResponse struct {
+type TweetResponse struct {
 	ID              int64          `json:"id"`
 	Content         *string        `json:"content"`
 	MediaType       *string        `json:"mediaType"`
 	MediaUrl        *string        `json:"mediaUrl"`
-	User            userResponse   `json:"user"`
+	User            UserResponse   `json:"user"`
 	ReplyCount      int32          `json:"replyCount"`
 	LikeCount       int32          `json:"likeCount"`
 	RetweetCount    int32          `json:"retweetCount"`
 	IsLiked         bool           `json:"isLiked"`
 	IsRetweeted     bool           `json:"isRetweeted"`
-	RetweetedTweet  *tweetResponse `json:"retweetedTweet,omitempty"`
+	RetweetedTweet  *TweetResponse `json:"retweetedTweet,omitempty"`
 	ReplyToTweetID  *int64         `json:"replyToTweetId"`
 	ReplyToUsername *string        `json:"replyToUsername"`
 	CreatedAt       time.Time      `json:"createdAt"`
 }
 
-func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
-	var original *tweetResponse
+func newTweetResponse(tweet usecase.TweetItem) TweetResponse {
+	var original *TweetResponse
 	if tweet.OriginalTweet != nil {
 		r := newTweetResponse(*tweet.OriginalTweet)
 		original = &r
 	}
 
-	return tweetResponse{
+	return TweetResponse{
 		ID:              tweet.ID,
 		Content:         tweet.Content,
 		MediaType:       tweet.MediaType,
@@ -92,7 +95,7 @@ func newTweetResponse(tweet usecase.TweetItem) tweetResponse {
 	}
 }
 
-type hashtagResponse struct {
+type HashtagResponse struct {
 	ID         int64     `json:"id"`
 	Text       string    `json:"text"`
 	UsageCount int32     `json:"usageCount"`
@@ -100,8 +103,8 @@ type hashtagResponse struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
-func newHashtagResponse(tag db.Hashtag) hashtagResponse {
-	return hashtagResponse{
+func newHashtagResponse(tag db.Hashtag) HashtagResponse {
+	return HashtagResponse{
 		ID:         tag.ID,
 		Text:       tag.Text,
 		UsageCount: tag.UsageCount,
@@ -110,9 +113,9 @@ func newHashtagResponse(tag db.Hashtag) hashtagResponse {
 	}
 }
 
-type notificationResponse struct {
+type NotificationResponse struct {
 	ID                    int64        `json:"id"`
-	Actor                 userResponse `json:"actor"`
+	Actor                 UserResponse `json:"actor"`
 	TweetID               *int64       `json:"tweetId"`
 	TweetContent          *string      `json:"tweetContent"`
 	TweetMediaUrl         *string      `json:"tweetMediaUrl"`
@@ -124,25 +127,25 @@ type notificationResponse struct {
 	CreatedAt             time.Time    `json:"createdAt"`
 }
 
-type messageResponse struct {
+type MessageResponse struct {
 	ID             int64        `json:"id"`
 	ConversationID int64        `json:"conversationId"`
-	Sender         userResponse `json:"sender"`
+	Sender         UserResponse `json:"sender"`
 	Content        string       `json:"content"`
 	CreatedAt      time.Time    `json:"createdAt"`
 }
 
 
 
-type conversationResponse struct {
+type ConversationResponse struct {
 	ID          int64           `json:"id"`
-	Peer        userResponse    `json:"peer"`
-	LastMessage messageResponse `json:"lastMessage"`
+	Peer        UserResponse    `json:"peer"`
+	LastMessage MessageResponse `json:"lastMessage"`
 	UpdatedAt   time.Time       `json:"updatedAt"`
 }
 
-func newNotificationResponse(item usecase.NotificationItem) notificationResponse {
-	return notificationResponse{
+func newNotificationResponse(item usecase.NotificationItem) NotificationResponse {
+	return NotificationResponse{
 		ID:                    item.ID,
 		Actor:                 newUserResponse(item.Actor),
 		TweetID:               item.TweetID,
@@ -157,8 +160,8 @@ func newNotificationResponse(item usecase.NotificationItem) notificationResponse
 	}
 }
 
-func newMessageResponse(item usecase.MessageItem) messageResponse {
-	return messageResponse{
+func newMessageResponse(item usecase.MessageItem) MessageResponse {
+	return MessageResponse{
 		ID:             item.ID,
 		ConversationID: item.ConversationID,
 		Sender:         newUserResponse(item.Sender),
@@ -167,8 +170,8 @@ func newMessageResponse(item usecase.MessageItem) messageResponse {
 	}
 }
 
-func newConversationResponse(item usecase.ConversationItem) conversationResponse {
-	return conversationResponse{
+func newConversationResponse(item usecase.ConversationItem) ConversationResponse {
+	return ConversationResponse{
 		ID:          item.ID,
 		Peer:        newUserResponse(item.Peer),
 		LastMessage: newMessageResponse(item.LastMessage),
@@ -178,52 +181,56 @@ func newConversationResponse(item usecase.ConversationItem) conversationResponse
 
 
 
-func successResponse() gin.H {
-	return gin.H{"success": true}
+type SuccessResponse struct {
+	Success bool `json:"success"`
 }
 
-func newUserResponseList(users []usecase.UserItem) []userResponse {
-	response := make([]userResponse, 0, len(users))
+func successResponse() SuccessResponse {
+	return SuccessResponse{Success: true}
+}
+
+func newUserResponseList(users []usecase.UserItem) []UserResponse {
+	response := make([]UserResponse, 0, len(users))
 	for _, user := range users {
 		response = append(response, newUserResponse(user))
 	}
 	return response
 }
 
-func newTweetResponseList(tweets []usecase.TweetItem) []tweetResponse {
-	response := make([]tweetResponse, 0, len(tweets))
+func newTweetResponseList(tweets []usecase.TweetItem) []TweetResponse {
+	response := make([]TweetResponse, 0, len(tweets))
 	for _, t := range tweets {
 		response = append(response, newTweetResponse(t))
 	}
 	return response
 }
 
-func newHashtagResponseList(hashtags []db.Hashtag) []hashtagResponse {
-	response := make([]hashtagResponse, 0, len(hashtags))
+func newHashtagResponseList(hashtags []db.Hashtag) []HashtagResponse {
+	response := make([]HashtagResponse, 0, len(hashtags))
 	for _, h := range hashtags {
 		response = append(response, newHashtagResponse(h))
 	}
 	return response
 }
 
-func newNotificationResponseList(items []usecase.NotificationItem) []notificationResponse {
-	response := make([]notificationResponse, 0, len(items))
+func newNotificationResponseList(items []usecase.NotificationItem) []NotificationResponse {
+	response := make([]NotificationResponse, 0, len(items))
 	for _, item := range items {
 		response = append(response, newNotificationResponse(item))
 	}
 	return response
 }
 
-func newMessageResponseList(items []usecase.MessageItem) []messageResponse {
-	response := make([]messageResponse, 0, len(items))
+func newMessageResponseList(items []usecase.MessageItem) []MessageResponse {
+	response := make([]MessageResponse, 0, len(items))
 	for _, item := range items {
 		response = append(response, newMessageResponse(item))
 	}
 	return response
 }
 
-func newConversationResponseList(items []usecase.ConversationItem) []conversationResponse {
-	response := make([]conversationResponse, 0, len(items))
+func newConversationResponseList(items []usecase.ConversationItem) []ConversationResponse {
+	response := make([]ConversationResponse, 0, len(items))
 	for _, item := range items {
 		response = append(response, newConversationResponse(item))
 	}

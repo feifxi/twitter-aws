@@ -12,6 +12,7 @@ Primary backend API for this project.
 - Zerolog
 - AWS S3 (presigned URL media uploads)
 - AWS CloudFront (CDN for media)
+- Swaggo (Automated OpenAPI 2.0 Docs)
 
 ## Architecture
 
@@ -43,8 +44,26 @@ Media is served through CloudFront CDN.
   - `GET /healthz` (liveness)
   - `GET /readyz` (readiness: DB/Redis dependency check)
 
-See API contract details:
-- `docs/api-contract.md`
+## API Documentation (Swagger)
+
+The API is fully documented using **Swaggo**. You can explore the interactive API reference and test endpoints directly from your browser:
+
+- **Swagger UI**: `http://localhost:8080/swagger/index.html`
+- **OpenAPI Spec**: `http://localhost:8080/swagger/doc.json`
+
+The documentation includes request/response schemas, authentication requirements (Bearer Token), and error structures.
+
+### Generating API Documentation
+
+If you modify handler annotations or response structs, you must regenerate the documentation:
+
+```bash
+# Install swag CLI if not already present
+go install github.com/swaggo/swag/cmd/swag@latest
+
+# Regenerate docs
+swag init -g cmd/api/main.go
+```
 
 ## Local Setup
 

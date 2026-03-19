@@ -111,7 +111,7 @@ func (server *Server) HTTPServer(address string) *http.Server {
 
 type redisNotificationPayload struct {
 	RecipientID  int64                `json:"recipientId"`
-	Notification notificationResponse `json:"notification"`
+	Notification NotificationResponse `json:"notification"`
 }
 
 func (server *Server) publishNotification(notification db.Notification) {
@@ -126,7 +126,7 @@ func (server *Server) publishNotification(notification db.Notification) {
 	server.broadcastToRedis(notification.RecipientID, newNotificationResponse(hydrated))
 }
 
-func (server *Server) broadcastToRedis(recipientID int64, notification notificationResponse) {
+func (server *Server) broadcastToRedis(recipientID int64, notification NotificationResponse) {
 	if server.redis == nil {
 		server.sendNotificationToUser(recipientID, notification)
 		return

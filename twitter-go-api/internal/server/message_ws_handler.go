@@ -31,6 +31,14 @@ type wsEnvelope struct {
 	Data           map[string]interface{} `json:"data,omitempty"`
 }
 
+// streamMessagesWS godoc
+// @Summary		Stream Messages (WebSocket)
+// @Description	Establish a WebSocket connection to receive real-time direct messages. Supports authentication via 'access_token' query param or 'Authorization' header.
+// @Tags			Messages
+// @Param			access_token	query	string	false	"JWT Access Token (if not using Authorization header)"
+// @Success		101				{string}	string	"Switching Protocols"
+// @Security		BearerAuth
+// @Router			/messages/ws [get]
 func (server *Server) streamMessagesWS(ctx *gin.Context) {
 	userID, ok := server.wsUserID(ctx)
 	if !ok {
@@ -128,7 +136,7 @@ func (server *Server) unregisterWSClient(client *chatWSClient) {
 	close(client.send)
 }
 
-func (server *Server) sendDirectMessageWS(userIDs []int64, message messageResponse) {
+func (server *Server) sendDirectMessageWS(userIDs []int64, message MessageResponse) {
 	payload, err := json.Marshal(wsEnvelope{
 		Type:           "dm.message",
 		ConversationID: &message.ConversationID,

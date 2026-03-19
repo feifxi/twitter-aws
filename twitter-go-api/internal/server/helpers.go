@@ -16,22 +16,22 @@ const (
 	maxSize     = int32(50)
 )
 
-type pageResponse[T any] struct {
+type PageResponse[T any] struct {
 	Items      []T     `json:"items"`
 	HasNext    bool    `json:"hasNext"`
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-func buildPageResponse[T any](items []T, size, offset int32) pageResponse[T] {
+func BuildPageResponse[T any](items []T, size, offset int32) PageResponse[T] {
 	if int32(len(items)) > size {
 		next := encodeCursor(offset + size)
-		return pageResponse[T]{
+		return PageResponse[T]{
 			Items:      items[:size],
 			HasNext:    true,
 			NextCursor: &next,
 		}
 	}
-	return pageResponse[T]{
+	return PageResponse[T]{
 		Items:   items,
 		HasNext: false,
 	}

@@ -23,9 +23,9 @@ func newErrorTestContext(path string) (*gin.Context, *httptest.ResponseRecorder)
 	return ctx, w
 }
 
-func decodeErrorResponse(t *testing.T, rec *httptest.ResponseRecorder) apperr.ErrorResponse {
+func decodeErrorResponse(t *testing.T, rec *httptest.ResponseRecorder) ErrorResponse {
 	t.Helper()
-	var out apperr.ErrorResponse
+	var out ErrorResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("failed to decode error response: %v body=%s", err, rec.Body.String())
 	}

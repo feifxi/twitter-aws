@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/chanombude/twitter-go-api/docs"
 	"github.com/chanombude/twitter-go-api/internal/logger"
 	"github.com/chanombude/twitter-go-api/internal/middleware"
 	"github.com/gin-contrib/cors"
@@ -13,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func (server *Server) setupRouter() {
@@ -67,6 +70,11 @@ func (server *Server) setupRouter() {
 	router.GET("/healthz", server.healthz)
 	router.GET("/readyz", server.readyz)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
+	// Swagger UI (disabled in production for security)
+	if server.config.Environment != "production" {
+		router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 
 	api := router.Group("/api/v1")
 	if server.config.GatewaySecret != "" {

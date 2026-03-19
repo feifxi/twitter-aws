@@ -9,6 +9,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// assistant godoc
+// @Summary		AI Assistant Chat (SSE)
+// @Description	Interact with the Gemini-powered AI assistant. It provides streaming responses (SSE) and has access to recent tweet context via RAG.
+// @Tags			Assistant
+// @Accept			json
+// @Produce			text/event-stream
+// @Param			request	body			usecase.AssistantInput	true	"Chat query and history"
+// @Success		200		{string}	string					"text/event-stream"
+// @Security		BearerAuth
+// @Failure		401		{object}	ErrorResponse
+// @Router			/assistant [post]
 func (server *Server) assistant(ctx *gin.Context) {
 	var input usecase.AssistantInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {

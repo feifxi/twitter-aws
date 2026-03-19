@@ -14,6 +14,18 @@ type createTweetRequest struct {
 	MediaType *string `json:"mediaType" binding:"required_with=MediaKey,omitempty,oneof=IMAGE VIDEO"`
 }
 
+// createTweet godoc
+// @Summary		Create Tweet
+// @Description	Post a new tweet with optional text and media.
+// @Tags			Tweets
+// @Accept			json
+// @Produce		json
+// @Param			request	body			createTweetRequest	true	"Tweet content and media"
+// @Success		201		{object}	TweetResponse
+// @Failure		400		{object}	ErrorResponse
+// @Failure		401		{object}	ErrorResponse
+// @Security		BearerAuth
+// @Router			/tweets [post]
 func (server *Server) createTweet(ctx *gin.Context) {
 	userID, ok := mustCurrentUserID(ctx)
 	if !ok {
@@ -42,6 +54,16 @@ func (server *Server) createTweet(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, newTweetResponse(tweet))
 }
 
+// deleteTweet godoc
+// @Summary		Delete Tweet
+// @Description	Remove a tweet by ID. Only the author can delete their own tweet.
+// @Tags			Tweets
+// @Param			id	path		int64	true	"Tweet ID"
+// @Success		200	{object}	SuccessResponse
+// @Failure		401	{object}	ErrorResponse
+// @Failure		403	{object}	ErrorResponse
+// @Security		BearerAuth
+// @Router			/tweets/{id} [delete]
 func (server *Server) deleteTweet(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -59,6 +81,15 @@ func (server *Server) deleteTweet(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, successResponse())
 }
 
+// getTweet godoc
+// @Summary		Get Tweet
+// @Description	Fetch a single tweet by its ID.
+// @Tags			Tweets
+// @Produce		json
+// @Param			id	path		int64	true	"Tweet ID"
+// @Success		200	{object}	TweetResponse
+// @Failure		404	{object}	ErrorResponse
+// @Router			/tweets/{id} [get]
 func (server *Server) getTweet(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -74,6 +105,16 @@ func (server *Server) getTweet(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, newTweetResponse(tweet))
 }
 
+// getReplies godoc
+// @Summary		Get Tweet Replies
+// @Description	Get a paginated list of replies to a specific tweet.
+// @Tags			Tweets
+// @Produce		json
+// @Param			id		path		int		true	"Tweet ID"
+// @Param			cursor	query		string	false	"Pagination cursor"
+// @Param			size	query		int		false	"Number of items per page"
+// @Success		200		{object}	PageResponse[TweetResponse]
+// @Router			/tweets/{id}/replies [get]
 func (server *Server) getReplies(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -86,15 +127,24 @@ func (server *Server) getReplies(ctx *gin.Context) {
 	}
 	page := offset / size
 	viewerID := optionalViewerID(ctx)
-	tweets, err := server.tweetUC.ListReplies(ctx, req.ID, page, size+1, viewerID)
+	replies, err := server.tweetUC.ListReplies(ctx, req.ID, page, size+1, viewerID)
 	if err != nil {
 		writeError(ctx, err)
 		return
 	}
-	response := newTweetResponseList(tweets)
-	ctx.JSON(http.StatusOK, buildPageResponse(response, size, offset))
+	response := newTweetResponseList(replies)
+	ctx.JSON(http.StatusOK, BuildPageResponse(response, size, offset))
 }
 
+// likeTweet godoc
+// @Summary		Like Tweet
+// @Description	Add a like to a tweet.
+// @Tags			Tweets
+// @Param			id	path		int64	true	"Tweet ID"
+// @Success		200	{object}	SuccessResponse
+// @Failure		401	{object}	ErrorResponse
+// @Security		BearerAuth
+// @Router			/tweets/{id}/like [post]
 func (server *Server) likeTweet(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -112,6 +162,15 @@ func (server *Server) likeTweet(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, successResponse())
 }
 
+// unlikeTweet godoc
+// @Summary		Unlike Tweet
+// @Description	Remove a like from a tweet.
+// @Tags			Tweets
+// @Param			id	path		int64	true	"Tweet ID"
+// @Success		200	{object}	SuccessResponse
+// @Failure		401	{object}	ErrorResponse
+// @Security		BearerAuth
+// @Router			/tweets/{id}/like [delete]
 func (server *Server) unlikeTweet(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -129,6 +188,16 @@ func (server *Server) unlikeTweet(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, successResponse())
 }
 
+// retweet godoc
+// @Summary		Retweet
+// @Description	Share a tweet on your own profile.
+// @Tags			Tweets
+// @Produce		json
+// @Param			id	path		int64	true	"Tweet ID to retweet"
+// @Success		200	{object}	TweetResponse
+// @Failure		401	{object}	ErrorResponse
+// @Security		BearerAuth
+// @Router			/tweets/{id}/retweet [post]
 func (server *Server) retweet(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -147,6 +216,15 @@ func (server *Server) retweet(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, newTweetResponse(tweet))
 }
 
+// undoRetweet godoc
+// @Summary		Undo Retweet
+// @Description	Remove a previously shared retweet.
+// @Tags			Tweets
+// @Param			id	path		int64	true	"Original Tweet ID"
+// @Success		200	{object}	SuccessResponse
+// @Failure		401	{object}	ErrorResponse
+// @Security		BearerAuth
+// @Router			/tweets/{id}/retweet [delete]
 func (server *Server) undoRetweet(ctx *gin.Context) {
 	var req idURIRequest
 	if err := ctx.ShouldBindUri(&req); err != nil {

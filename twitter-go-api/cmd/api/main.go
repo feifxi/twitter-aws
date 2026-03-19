@@ -22,7 +22,27 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/chanombude/twitter-go-api/docs"
 )
+
+// @title			Twitter Go API
+// @version		1.0
+// @description	High-performance Go backend for the Chanom Twitter clone.
+// @termsOfService	http://swagger.io/terms/
+
+// @contact.name	API Support
+// @contact.url	http://github.com/chanombude/twitter-go-api
+
+// @license.name	Apache 2.0
+// @license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host			localhost:8080
+// @BasePath		/api/v1
+
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				Type 'Bearer ' followed by your JWT token.
 
 func main() {
 	config, err := config.LoadConfig(".")

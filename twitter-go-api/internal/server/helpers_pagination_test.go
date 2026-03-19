@@ -5,7 +5,7 @@ import "testing"
 func TestBuildPageResponseTrimsAndSetsHasNext(t *testing.T) {
 	t.Parallel()
 
-	resp := buildPageResponse([]int{1, 2, 3}, 2, 0)
+	resp := BuildPageResponse([]int{1, 2, 3}, 2, 0)
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(resp.Items))
 	}
@@ -23,7 +23,7 @@ func TestBuildPageResponseTrimsAndSetsHasNext(t *testing.T) {
 func TestBuildPageResponseNoTrimAndNoNext(t *testing.T) {
 	t.Parallel()
 
-	resp := buildPageResponse([]int{1, 2}, 2, 0)
+	resp := BuildPageResponse([]int{1, 2}, 2, 0)
 	if len(resp.Items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(resp.Items))
 	}
